@@ -1,0 +1,290 @@
+---
+title: "Encoder Settings"
+description: "Configure video and audio encoding parameters for adaptive bitrate streaming in Ant Media Server"
+---
+
+Encoder settings define the video and audio quality profiles used for adaptive bitrate (ABR) streaming and transcoding in Ant Media Server.
+
+## Encoder Settings Object
+
+Each encoder profile consists of four main parameters:
+
+<ParamField path="height" type="int" required>
+  Video resolution height in pixels (e.g., 480, 720, 1080).
+  
+  The width is automatically calculated to maintain the aspect ratio of the source stream.
+</ParamField>
+
+<ParamField path="videoBitrate" type="int" required>
+  Video bitrate in bits per second (bps).
+  
+  **Examples:**
+  - 240p: 200,000 - 400,000 bps
+  - 360p: 300,000 - 600,000 bps
+  - 480p: 500,000 - 1,000,000 bps
+  - 720p: 1,500,000 - 3,000,000 bps
+  - 1080p: 3,000,000 - 6,000,000 bps
+</ParamField>
+
+<ParamField path="audioBitrate" type="int" required>
+  Audio bitrate in bits per second (bps).
+  
+  **Typical values:**
+  - 64,000 bps (64 kbps) - Low quality
+  - 96,000 bps (96 kbps) - Standard quality
+  - 128,000 bps (128 kbps) - Good quality
+  - 192,000 bps (192 kbps) - High quality
+</ParamField>
+
+<ParamField path="forceEncode" type="boolean" default="true">
+  Enable/disable stream resolution check.
+  
+  If enabled, Ant Media Server will ignore adaptive resolutions higher than the incoming stream.
+  
+  **Example:** If incoming stream is 480p and you request 720p encoding with `forceEncode: true`, the 720p profile will be ignored.
+</ParamField>
+
+## Configuration Methods
+
+### Via encoderSettingsString
+
+The `encoderSettingsString` parameter accepts a JSON array of encoder profiles:
+
+```json
+[
+  {
+    "height": 720,
+    "videoBitrate": 2000000,
+    "audioBitrate": 128000,
+    "forceEncode": true
+  },
+  {
+    "height": 480,
+    "videoBitrate": 1000000,
+    "audioBitrate": 96000,
+    "forceEncode": true
+  },
+  {
+    "height": 360,
+    "videoBitrate": 600000,
+    "audioBitrate": 64000,
+    "forceEncode": true
+  }
+]
+```
+
+### Via Web Panel
+
+Encoder settings can be configured through the Ant Media Server web panel:
+
+1. Navigate to your application settings
+2. Go to the **Adaptive Bitrate** section
+3. Add or modify encoder profiles
+4. Save changes
+
+## Video Encoder Configuration
+
+### Encoder Selection
+
+<ParamField path="encoderName" type="string" default="">
+  Specific encoder to use for transcoding.
+  
+  **Options:**
+  - `"h264_nvenc"` - NVIDIA GPU encoder (requires NVIDIA GPU)
+  - `"openh264"` - OpenH264 software encoder
+  - `"libx264"` - x264 software encoder
+  - Empty string - Auto-select based on available hardware
+</ParamField>
+
+<ParamField path="encoderSelectionPreference" type="string" default="gpu_and_cpu">
+  Encoder selection strategy:
+  
+  - `"gpu_and_cpu"` - Try GPU first, fallback to CPU if GPU unavailable
+  - `"only_gpu"` - Only use GPU encoder, fail if unavailable
+</ParamField>
+
+### Encoder Parameters
+
+<ParamField path="encoderParameters" type="object" default="{}">
+  Encoder-specific parameters in JSON format. Keys should match official FFmpeg encoder names.
+  
+  **Example:**
+  ```json
+  {
+    "libopenh264": {
+      "profile": "main"
+    },
+    "vpx": {
+      "deadline": "realtime"
+    },
+    "h264_nvenc": {
+      "preset": "ll"
+    }
+  }
+  ```
+</ParamField>
+
+### Thread Configuration
+
+<ParamField path="encoderThreadCount" type="int" default="0">
+  Number of threads for encoding. 0 means auto-detect.
+</ParamField>
+
+<ParamField path="encoderThreadType" type="int" default="0">
+  Thread type for encoding:
+  - `0` - Auto
+  - `1` - Frame-based threading
+  - `2` - Slice-based threading
+</ParamField>
+
+## Codec Support
+
+### H.264
+
+<ParamField path="h264Enabled" type="boolean" default="true">
+  Enable/disable H.264 encoding.
+</ParamField>
+
+### H.265 (HEVC)
+
+<ParamField path="h265Enabled" type="boolean" default="false">
+  Enable/disable H.265/HEVC encoding.
+</ParamField>
+
+### VP8
+
+<ParamField path="vp8Enabled" type="boolean" default="false">
+  Enable/disable VP8 encoding.
+</ParamField>
+
+<ParamField path="vp8EncoderThreadCount" type="int" default="1">
+  Number of threads for VP8 encoder.
+</ParamField>
+
+## Audio Configuration
+
+### AAC Encoding
+
+<ParamField path="aacEncodingEnabled" type="boolean" default="true">
+  Enable AAC encoding.
+  
+  If true, AAC encoding is active even if MP4 or HLS muxing is not enabled.
+  Set to true if sending streams to RTMP endpoints or enabling/disabling MP4 recording on the fly.
+</ParamField>
+
+<ParamField path="audioBitrateSFU" type="int" default="96000">
+  Audio bitrate in SFU mode for transcoding to AAC and Opus formats.
+  
+  After version 2.3, incoming audio is forwarded directly to viewers without transcoding when possible.
+</ParamField>
+
+## GOP and Quality Settings
+
+<ParamField path="gopSize" type="int" default="0">
+  Group of Pictures (GOP) size - the interval between keyframes.
+  
+  **Important:** This is NOT in seconds, but in frame count.
+  
+  **Example:** If GOP size is 50 and frame rate is 25 fps:
+  - Keyframe interval = 50 / 25 = 2 seconds
+  
+  Default value of 0 uses the incoming GOP size.
+</ParamField>
+
+<ParamField path="forceAspectRatioInTranscoding" type="boolean" default="false">
+  Force aspect ratio to match incoming stream exactly.
+  
+  When enabled, Ant Media Server may adjust output height to maintain perfect aspect ratio. Critical for DASH streaming with multiple bitrates.
+  
+  **Example:** 
+  - Incoming: 1280x720 (16:9)
+  - Target: 480p
+  - Without force: Output may be exactly 480p with slight ratio difference
+  - With force: Output height adjusted to 853x480 for perfect 16:9
+</ParamField>
+
+## Hardware Acceleration
+
+<ParamField path="hwScalingEnabled" type="boolean" default="false">
+  Enable GPU-based video frame scaling for adaptive bitrate.
+  
+  **Note:** Requires special build - contact Ant Media Support.
+</ParamField>
+
+## Common Encoder Profiles
+
+### Low Latency Streaming
+
+```json
+[
+  {"height": 720, "videoBitrate": 2500000, "audioBitrate": 128000, "forceEncode": true},
+  {"height": 480, "videoBitrate": 1000000, "audioBitrate": 96000, "forceEncode": true},
+  {"height": 360, "videoBitrate": 600000, "audioBitrate": 64000, "forceEncode": true}
+]
+```
+
+### High Quality Streaming
+
+```json
+[
+  {"height": 1080, "videoBitrate": 5000000, "audioBitrate": 192000, "forceEncode": true},
+  {"height": 720, "videoBitrate": 3000000, "audioBitrate": 128000, "forceEncode": true},
+  {"height": 480, "videoBitrate": 1500000, "audioBitrate": 96000, "forceEncode": true}
+]
+```
+
+### Mobile-Optimized Streaming
+
+```json
+[
+  {"height": 480, "videoBitrate": 800000, "audioBitrate": 96000, "forceEncode": true},
+  {"height": 360, "videoBitrate": 500000, "audioBitrate": 64000, "forceEncode": true},
+  {"height": 240, "videoBitrate": 300000, "audioBitrate": 64000, "forceEncode": true}
+]
+```
+
+### Conference/Webinar (Speaker + Attendees)
+
+```json
+[
+  {"height": 720, "videoBitrate": 1500000, "audioBitrate": 128000, "forceEncode": true},
+  {"height": 360, "videoBitrate": 500000, "audioBitrate": 96000, "forceEncode": true}
+]
+```
+
+## SFU Mode vs Transcoding
+
+### SFU Mode (No Adaptive Bitrate)
+
+If `encoderSettingsString` is empty or not set, Ant Media Server operates in SFU (Selective Forwarding Unit) mode:
+
+- No transcoding is performed
+- Original stream is forwarded directly to viewers
+- Lower CPU usage
+- Single quality available to viewers
+- Ideal for WebRTC-to-WebRTC streaming
+
+### Transcoding Mode (With Adaptive Bitrate)
+
+When encoder settings are configured:
+
+- Stream is transcoded to multiple qualities
+- Viewers automatically receive appropriate quality based on bandwidth
+- Higher CPU/GPU usage
+- Better viewer experience across different network conditions
+- Required for HLS/DASH playback from WebRTC sources
+
+## Best Practices
+
+1. **Start with 2-3 profiles** - Don't create too many profiles initially. Monitor usage and add more if needed.
+
+2. **Bitrate guidelines** - Use approximately 2-4 bits per pixel for good quality:
+   - 720p @ 30fps: 1280×720×30×3 ≈ 2,000,000 bps
+
+3. **Audio bitrate** - 96-128 kbps is sufficient for most use cases. Use 64 kbps only for very low-bandwidth scenarios.
+
+4. **GOP size** - Keep GOP size small (1-2 seconds) for low latency. Larger GOP reduces bandwidth but increases latency.
+
+5. **Hardware encoding** - Use GPU encoding (h264_nvenc) when available for better performance.
+
+6. **Test your settings** - Always test encoder settings with real streams under actual network conditions.

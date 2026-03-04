@@ -1,0 +1,341 @@
+---
+title: "AWS S3 Storage"
+description: "Configure Amazon S3 and S3-compatible storage services for automatic media file uploads"
+---
+
+## Overview
+
+The AWS S3 storage client enables automatic upload of recorded streams, VOD files, and preview images to Amazon S3 or any S3-compatible storage service (DigitalOcean Spaces, Wasabi, OVH, Minio, etc.).
+
+## Features
+
+<CardGroup cols={2}>
+  <Card title="S3-Compatible" icon="plug">
+    Works with Amazon S3 and any S3-compatible service
+  </Card>
+  
+  <Card title="Multipart Upload" icon="upload">
+    Automatic multipart upload for large files (>5MB)
+  </Card>
+  
+  <Card title="Storage Classes" icon="box-archive">
+    Support for all S3 storage classes (Standard, Glacier, etc.)
+  </Card>
+  
+  <Card title="Custom Permissions" icon="shield-halved">
+    Full control over ACLs and access permissions
+  </Card>
+</CardGroup>
+
+## Configuration
+
+### Spring Bean Configuration
+
+Add the S3 storage client bean to your application's `red5-web.xml`:
+
+```xml
+<bean id="app.storageClient" class="io.antmedia.storage.AmazonS3StorageClient">
+  <property name="enabled" value="true" />
+  <property name="storageName" value="your-bucket-name" />
+  <property name="accessKey" value="YOUR_ACCESS_KEY" />
+  <property name="secretKey" value="YOUR_SECRET_KEY" />
+  <property name="region" value="us-east-1" />
+  <property name="permission" value="public-read" />
+  <property name="storageClass" value="STANDARD" />
+</bean>
+```
+
+### S3-Compatible Services
+
+For S3-compatible services (DigitalOcean, Wasabi, OVH, etc.), specify a custom endpoint:
+
+```xml
+<bean id="app.storageClient" class="io.antmedia.storage.AmazonS3StorageClient">
+  <property name="enabled" value="true" />
+  <property name="storageName" value="your-bucket-name" />
+  <property name="accessKey" value="YOUR_ACCESS_KEY" />
+  <property name="secretKey" value="YOUR_SECRET_KEY" />
+  <property name="region" value="us-east-1" />
+  <property name="endpoint" value="https://nyc3.digitaloceanspaces.com" />
+  <property name="pathStyleAccessEnabled" value="false" />
+</bean>
+```
+
+## Configuration Parameters
+
+| Parameter | Type | Description | Required | Default |
+|-----------|------|-------------|----------|----------|
+| `enabled` | boolean | Enable S3 storage integration | Yes | `false` |
+| `storageName` | string | S3 bucket name | Yes | - |
+| `accessKey` | string | AWS access key ID | Yes* | - |
+| `secretKey` | string | AWS secret access key | Yes* | - |
+| `region` | string | AWS region (e.g., us-east-1, eu-west-1) | Yes | - |
+| `endpoint` | string | Custom S3 endpoint for S3-compatible services | No | - |
+| `permission` | string | File ACL permissions | No | `public-read` |
+| `cacheControl` | string | Cache-Control header value | No | `no-store, no-cache, must-revalidate, max-age=0` |
+| `storageClass` | string | S3 storage class | No | `STANDARD` |
+| `pathStyleAccessEnabled` | boolean | Use path-style access instead of virtual-hosted-style | No | `false` |
+| `multipartUploadThreshold` | long | File size threshold for multipart upload (bytes) | No | `5242880` (5MB) |
+| `transferBufferSize` | int | Transfer buffer size for uploads | No | - |
+
+<Note>
+  **IAM Credentials**: If running on EC2, you can use IAM roles instead of providing `accessKey` and `secretKey`. Leave them unset to use instance credentials.
+</Note>
+
+## Storage Classes
+
+S3 supports multiple storage classes for cost optimization:
+
+- **STANDARD** - Frequent access, low latency
+- **STANDARD_IA** - Infrequent access
+- **INTELLIGENT_TIERING** - Automatic cost optimization
+- **ONEZONE_IA** - Lower cost, single AZ
+- **GLACIER** - Archive with retrieval time
+- **GLACIER_IR** - Instant retrieval archive
+- **DEEP_ARCHIVE** - Lowest cost, long-term archive
+
+```xml
+<property name="storageClass" value="INTELLIGENT_TIERING" />
+```
+
+## Permission (ACL) Options
+
+Configure file access permissions:
+
+| Permission | Description |
+|-----------|-------------|
+| `public-read` | Public read access, owner has full control |
+| `private` | Only owner has access |
+| `public-read-write` | Public read and write access |
+| `authenticated-read` | AWS authenticated users can read |
+| `bucket-owner-read` | Bucket owner can read |
+| `bucket-owner-full-control` | Bucket owner has full control |
+| `aws-exec-read` | EC2 can read for image bundles |
+| `log-delivery-write` | Log Delivery group can write |
+
+```xml
+<property name="permission" value="private" />
+```
+
+## AWS IAM Setup
+
+### Required IAM Permissions
+
+Create an IAM user or role with these permissions:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:PutObjectAcl",
+        "s3:GetObject",
+        "s3:DeleteObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::your-bucket-name/*",
+        "arn:aws:s3:::your-bucket-name"
+      ]
+    }
+  ]
+}
+```
+
+## Advanced Configuration
+
+### Multipart Upload
+
+Large files are automatically uploaded using multipart upload. Configure the threshold:
+
+```xml
+<property name="multipartUploadThreshold" value="10485760" /> <!-- 10MB -->
+```
+
+### Path-Style Access
+
+Some S3-compatible services require path-style access:
+
+```xml
+<property name="pathStyleAccessEnabled" value="true" />
+```
+
+**Virtual-hosted-style**: `https://bucket-name.s3.amazonaws.com/key`  
+**Path-style**: `https://s3.amazonaws.com/bucket-name/key`
+
+### Progress Monitoring
+
+Monitor upload progress programmatically:
+
+```java
+ProgressListener progressListener = progressEvent -> {
+    if (progressEvent.getEventType() == ProgressEventType.TRANSFER_COMPLETED_EVENT) {
+        logger.info("Upload completed");
+    } else if (progressEvent.getEventType() == ProgressEventType.TRANSFER_FAILED_EVENT) {
+        logger.error("Upload failed");
+    }
+};
+
+storageClient.save(key, file, true, progressListener);
+```
+
+## Common Use Cases
+
+### DigitalOcean Spaces
+
+```xml
+<bean id="app.storageClient" class="io.antmedia.storage.AmazonS3StorageClient">
+  <property name="enabled" value="true" />
+  <property name="storageName" value="my-space-name" />
+  <property name="accessKey" value="DO_SPACES_KEY" />
+  <property name="secretKey" value="DO_SPACES_SECRET" />
+  <property name="region" value="nyc3" />
+  <property name="endpoint" value="https://nyc3.digitaloceanspaces.com" />
+</bean>
+```
+
+### Wasabi
+
+```xml
+<bean id="app.storageClient" class="io.antmedia.storage.AmazonS3StorageClient">
+  <property name="enabled" value="true" />
+  <property name="storageName" value="my-bucket" />
+  <property name="accessKey" value="WASABI_KEY" />
+  <property name="secretKey" value="WASABI_SECRET" />
+  <property name="region" value="us-east-1" />
+  <property name="endpoint" value="https://s3.wasabisys.com" />
+</bean>
+```
+
+### MinIO (Self-Hosted)
+
+```xml
+<bean id="app.storageClient" class="io.antmedia.storage.AmazonS3StorageClient">
+  <property name="enabled" value="true" />
+  <property name="storageName" value="my-bucket" />
+  <property name="accessKey" value="MINIO_ACCESS_KEY" />
+  <property name="secretKey" value="MINIO_SECRET_KEY" />
+  <property name="region" value="us-east-1" />
+  <property name="endpoint" value="http://minio.example.com:9000" />
+  <property name="pathStyleAccessEnabled" value="true" />
+</bean>
+```
+
+## File Operations
+
+### Upload Files
+
+```java
+// Upload and delete local file
+storageClient.save("recordings/stream123.mp4", file, true);
+
+// Upload and keep local file
+storageClient.save("recordings/stream123.mp4", file, false);
+
+// Upload from input stream with wait
+storageClient.save("recordings/stream123.mp4", inputStream, true);
+```
+
+### Delete Files
+
+```java
+// Delete single file
+storageClient.delete("recordings/stream123.mp4");
+
+// Delete multiple files matching pattern
+storageClient.deleteMultipleFiles("recordings/stream123", ".*\\.mp4$");
+```
+
+### Check File Existence
+
+```java
+boolean exists = storageClient.fileExist("recordings/stream123.mp4");
+```
+
+### Retrieve Files
+
+```java
+InputStream stream = storageClient.get("recordings/stream123.mp4");
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Connection timeout errors" icon="clock">
+    - Verify your `endpoint` URL is correct
+    - Check firewall rules allow outbound HTTPS (443)
+    - Increase connection timeout if needed (default: 120 seconds)
+  </Accordion>
+
+  <Accordion title="Access denied errors" icon="ban">
+    - Verify `accessKey` and `secretKey` are correct
+    - Check IAM permissions include required S3 actions
+    - Ensure bucket name matches exactly (case-sensitive)
+  </Accordion>
+
+  <Accordion title="Bucket not found" icon="folder-open">
+    - Verify `storageName` (bucket name) is correct
+    - Check `region` matches bucket region
+    - For S3-compatible services, verify `endpoint` is correct
+  </Accordion>
+
+  <Accordion title="Files not uploading" icon="cloud-xmark">
+    - Confirm `enabled` is set to `true`
+    - Check application logs for error details
+    - Verify network connectivity to S3/endpoint
+    - Test with small file first
+  </Accordion>
+</AccordionGroup>
+
+## Performance Tuning
+
+### Connection Pool
+
+The S3 client uses a connection pool with these defaults:
+- **Max connections**: 100
+- **Connection timeout**: 120 seconds
+- **Max retries**: 15
+
+These are optimized for most use cases but can be adjusted in the source code if needed.
+
+### Transfer Manager
+
+Multipart uploads use AWS Transfer Manager for optimal performance:
+- Automatic parallel part uploads
+- Automatic retry on failures
+- Progress tracking
+
+<Warning>
+  **Important**: Uploads are asynchronous by default. Use `waitForCompletion` parameter if you need synchronous behavior.
+</Warning>
+
+## Security Best Practices
+
+<Steps>
+  <Step title="Use IAM Roles">
+    On EC2/ECS, use IAM roles instead of hardcoded credentials.
+  </Step>
+
+  <Step title="Restrict Permissions">
+    Grant only necessary S3 permissions (PutObject, GetObject, DeleteObject).
+  </Step>
+
+  <Step title="Enable Encryption">
+    Configure S3 bucket encryption (SSE-S3, SSE-KMS) for data at rest.
+  </Step>
+
+  <Step title="Use Private ACLs">
+    For sensitive content, use `private` permission instead of `public-read`.
+  </Step>
+
+  <Step title="Enable Versioning">
+    Enable S3 bucket versioning to protect against accidental deletions.
+  </Step>
+</Steps>
+
+<Note>
+  **Configuration File Location**: `red5-web.xml` is typically located at `/usr/local/antmedia/webapps/YourApp/WEB-INF/red5-web.xml`
+</Note>

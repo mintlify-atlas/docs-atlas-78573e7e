@@ -1,0 +1,593 @@
+---
+title: "Application Settings"
+description: "Comprehensive guide to Ant Media Server application-level configuration parameters"
+---
+
+Application settings control the behavior of individual applications running in Ant Media Server. These settings are stored in `<AMS_DIR>/webapps/<AppName>/WEB-INF/red5-web.properties` and can be configured through the web panel or by editing the properties file directly.
+
+## Streaming Settings
+
+### Recording Formats
+
+<ParamField path="mp4MuxingEnabled" type="boolean" default="false">
+  Enable/disable MP4 recording. If enabled, an MP4 file is created in the `<APP_DIR>/streams` directory.
+</ParamField>
+
+<ParamField path="webMMuxingEnabled" type="boolean" default="false">
+  Enable/disable WebM recording.
+</ParamField>
+
+<ParamField path="hlsMuxingEnabled" type="boolean" default="true">
+  Enable/disable HLS recording. If enabled, HLS files (m3u8 and ts) are created in the `<APP_DIR>/streams` directory and HLS playing is enabled.
+</ParamField>
+
+<ParamField path="dashMuxingEnabled" type="boolean" default="false">
+  Enable/disable DASH recording.
+</ParamField>
+
+### File Naming
+
+<ParamField path="addDateTimeToMp4FileName" type="boolean" default="false">
+  Add date and time to MP4 file names. If enabled, timestamps are added to recorded MP4 files.
+</ParamField>
+
+<ParamField path="addDateTimeToHlsFileName" type="boolean" default="false">
+  Add date and time to HLS file names (.m3u8 and .ts files).
+</ParamField>
+
+<ParamField path="fileNameFormat" type="string" default="%r%b">
+  Format string for output file names. Supports the following placeholders:
+  - `%r`: Resolution (e.g., "720p")
+  - `%b`: Bitrate (e.g., "1500kbps")
+  - `{customText}`: Custom text in curly braces
+  
+  **Examples:**
+  - `"%r%b"` → `stream1_720p1500kbps`
+  - `"{HD}%r%b"` → `stream1_HD720p1500kbps`
+  - `"%r{custom}%b"` → `stream1_720pcustom1500kbps`
+</ParamField>
+
+### File Cleanup
+
+<ParamField path="deleteHLSFilesOnEnded" type="boolean" default="true">
+  Delete HLS files (m3u8 and ts) after the broadcast has finished.
+</ParamField>
+
+<ParamField path="deleteDASHFilesOnEnded" type="boolean" default="true">
+  Delete DASH files (mpd and m4s) after the broadcast has finished.
+</ParamField>
+
+## HLS Configuration
+
+<ParamField path="hlsTime" type="string" default="2">
+  Duration of segments in seconds. Segments will be cut on the next key frame after this time has passed.
+</ParamField>
+
+<ParamField path="hlsListSize" type="string" default="15">
+  Maximum number of playlist entries in m3u8 files. If 0, the list file will contain all segments.
+</ParamField>
+
+<ParamField path="hlsPlayListType" type="string" default="">
+  HLS playlist type. Can be "event" or "vod". Check HLS documentation for EXT-X-PLAYLIST-TYPE.
+</ParamField>
+
+<ParamField path="hlsSegmentType" type="string" default="mpegts">
+  HLS segment file type. Can be "mpegts" or "fmp4". fmp4 is compatible for playing HEVC HLS streams.
+</ParamField>
+
+<ParamField path="hlsSegmentFileSuffixFormat" type="string" default="%09d">
+  Suffix format for HLS segment files.
+  - Default: `%09d` (9 digit incremental)
+  - With date: `%Y%m%d-%s`
+  - Combined: `%s-%%09d` (requires +second_level_segment_index in hlsflags)
+</ParamField>
+
+<ParamField path="hlsflags" type="string" default="delete_segments+program_date_time">
+  HLS flags for FFmpeg HLS Muxer. Separate multiple options with `+` or `-`.
+  
+  **Example:**
+  ```
+  hlsflags=+program_date_time+round_durations+append_list
+  ```
+  
+  See [FFmpeg HLS documentation](https://ffmpeg.org/ffmpeg-formats.html#Options-6) for details.
+</ParamField>
+
+<ParamField path="hlsHttpEndpoint" type="string" default="">
+  HTTP endpoint to push the HLS stream.
+</ParamField>
+
+<ParamField path="hlsEncryptionKeyInfoFile" type="string" default="">
+  Full path to HLS encryption key info file. Format:
+  ```
+  key URI
+  key file path
+  IV (optional)
+  ```
+  
+  **Example:**
+  ```
+  http://server/file.key
+  /path/to/file.key
+  0123456789ABCDEF0123456789ABCDEF
+  ```
+</ParamField>
+
+## DASH Configuration
+
+<ParamField path="dashSegDuration" type="string" default="6">
+  Duration of DASH segments in seconds.
+</ParamField>
+
+<ParamField path="dashFragmentDuration" type="string" default="0.5">
+  Duration of DASH fragments. Fragments are a property of fragmented MP4 files (moof + mdat).
+</ParamField>
+
+<ParamField path="dashTargetLatency" type="string" default="3.5">
+  Target latency for DASH streaming in seconds.
+</ParamField>
+
+<ParamField path="dashWindowSize" type="string" default="5">
+  Number of files in the DASH manifest.
+</ParamField>
+
+<ParamField path="dashExtraWindowSize" type="string" default="5">
+  Number of segments kept outside the manifest before removing from disk.
+</ParamField>
+
+<ParamField path="lLDashEnabled" type="boolean" default="true">
+  Enable low latency DASH. Effective if DASH is enabled.
+</ParamField>
+
+<ParamField path="lLHLSEnabled" type="boolean" default="false">
+  Enable low latency HLS via DASH muxer. Effective if DASH is enabled.
+</ParamField>
+
+<ParamField path="hlsEnabledViaDash" type="boolean" default="false">
+  Enable HLS through DASH muxer. Effective if DASH is enabled.
+</ParamField>
+
+<ParamField path="useTimelineDashMuxing" type="boolean" default="false">
+  Use timeline in DASH muxing.
+</ParamField>
+
+<ParamField path="dashHttpStreaming" type="boolean" default="true">
+  Use HTTP streaming in Low Latency DASH. If true, sends files through HTTP. If false, writes files to disk directly.
+</ParamField>
+
+<ParamField path="dashHttpEndpoint" type="string" default="">
+  HTTP endpoint for DASH/CMAF streams.
+</ParamField>
+
+## WebRTC Settings
+
+<ParamField path="webRTCEnabled" type="boolean" default="true">
+  Enable/disable WebRTC playing.
+</ParamField>
+
+<ParamField path="webRTCFrameRate" type="int" default="30">
+  Frame rate for video publishing to WebRTC players.
+</ParamField>
+
+<ParamField path="webRTCPortRangeMin" type="int" default="50000">
+  Minimum port number for WebRTC connections. Must be less than webRTCPortRangeMax.
+</ParamField>
+
+<ParamField path="webRTCPortRangeMax" type="int" default="60000">
+  Maximum port number for WebRTC connections. Must be greater than webRTCPortRangeMin.
+</ParamField>
+
+<ParamField path="stunServerURI" type="string" default="stun:stun1.l.google.com:19302">
+  STUN or TURN server URI for WebRTC ICE candidates. Can be a STUN or TURN URL.
+</ParamField>
+
+<ParamField path="turnServerUsername" type="string" default="">
+  TURN server username for WebRTC ICE candidates. Requires stunServerURI and turnServerCredential to be effective.
+</ParamField>
+
+<ParamField path="turnServerCredential" type="string" default="">
+  TURN server credential for WebRTC ICE candidates. Requires stunServerURI and turnServerUsername to be effective.
+</ParamField>
+
+<ParamField path="webRTCTcpCandidatesEnabled" type="boolean" default="false">
+  Enable TCP candidates for WebRTC connections. If false, only UDP will be used.
+</ParamField>
+
+<ParamField path="webRTCSdpSemantics" type="string" default="unifiedPlan">
+  WebRTC SDP semantics. Can be "planB" or "unifiedPlan".
+</ParamField>
+
+<ParamField path="portAllocatorFlags" type="int" default="0">
+  Port allocator flags for WebRTC:
+  - `PORTALLOCATOR_DISABLE_UDP = 0x01`
+  - `PORTALLOCATOR_DISABLE_STUN = 0x02`
+  - `PORTALLOCATOR_DISABLE_RELAY = 0x04`
+</ParamField>
+
+<ParamField path="disableIPv6Candidates" type="boolean" default="true">
+  Enable/disable IPv6 candidates for WebRTC.
+</ParamField>
+
+<ParamField path="webRTCViewerLimit" type="int" default="-1">
+  Application-level WebRTC viewer limit. -1 means unlimited.
+</ParamField>
+
+<ParamField path="webRTCKeyframeTime" type="int" default="2000">
+  Interval in milliseconds for requesting key frames in SFU mode.
+</ParamField>
+
+<ParamField path="webRTCClientStartTimeoutMs" type="int" default="10000">
+  Timeout in milliseconds for WebRTC client to start. Also used as reconnection timeout for publishers in fluctuating networks.
+</ParamField>
+
+<ParamField path="useOriginalWebRTCEnabled" type="boolean" default="false">
+  Use the original WebRTC stream in adaptive bitrate scenarios. If true and adaptive bitrate is enabled, both original and transcoded streams are available.
+</ParamField>
+
+<ParamField path="replaceCandidateAddrWithServerAddr" type="boolean" default="false">
+  Replace ICE candidate address with server address. Requires serverName to be set in conf/red5.properties.
+</ParamField>
+
+<ParamField path="iceGatheringTimeoutMs" type="long" default="2000">
+  Timeout in milliseconds for ICE gathering process, especially for WHIP ingestion.
+</ParamField>
+
+<ParamField path="dropWebRTCIngestIfNoPacketReceived" type="boolean" default="false">
+  Drop WebRTC ingest if no audio or video packets are received within webRTCClientStartTimeoutMs.
+</ParamField>
+
+## Adaptive Bitrate (ABR)
+
+<ParamField path="encoderSettingsString" type="string" default="">
+  Encoder settings in JSON array format for adaptive bitrate streaming. If empty, SFU mode will be active.
+  
+  **Example:**
+  ```json
+  [
+    {"height":480, "videoBitrate":500000, "audioBitrate":128000, "forceEncode":true},
+    {"height":360, "videoBitrate":300000, "audioBitrate":96000, "forceEncode":true}
+  ]
+  ```
+</ParamField>
+
+<ParamField path="addOriginalMuxerIntoHLSPlaylist" type="boolean" default="true">
+  Add the original stream to the HLS playlist if adaptive bitrate is enabled.
+</ParamField>
+
+<ParamField path="forceDecoding" type="boolean" default="false">
+  Force stream decoding even if there is no adaptive bitrate setting.
+</ParamField>
+
+### Stats-Based ABR
+
+<ParamField path="statsBasedABREnabled" type="boolean" default="true">
+  Enable statistics-based adaptive bitrate switching algorithm.
+</ParamField>
+
+<ParamField path="abrDownScalePacketLostRatio" type="float" default="1">
+  Packet loss percentage threshold to switch to lower resolution.
+</ParamField>
+
+<ParamField path="abrUpScalePacketLostRatio" type="float" default="0.1">
+  Packet loss percentage threshold to switch to higher resolution.
+</ParamField>
+
+<ParamField path="abrUpScaleRTTMs" type="int" default="150">
+  Round trip time threshold in milliseconds to switch to higher resolution.
+</ParamField>
+
+<ParamField path="abrUpScaleJitterMs" type="int" default="30">
+  Jitter threshold in milliseconds to switch to higher resolution.
+</ParamField>
+
+### Excessive Bandwidth Algorithm
+
+<ParamField path="excessiveBandwidthAlgorithmEnabled" type="boolean" default="false">
+  Enable the excessive bandwidth algorithm that attempts to switch to higher bitrate even when bandwidth seems insufficient.
+</ParamField>
+
+<ParamField path="excessiveBandwidthValue" type="int" default="300000">
+  Bandwidth threshold in bps for the excessive bandwidth algorithm.
+</ParamField>
+
+<ParamField path="excessiveBandwidthCallThreshold" type="int" default="3">
+  Number of consecutive calls needed to trigger bitrate switch.
+</ParamField>
+
+<ParamField path="excessiveBandwithTryCountBeforeSwitchback" type="int" default="4">
+  Number of attempts before switching back to lower quality.
+</ParamField>
+
+<ParamField path="packetLossDiffThresholdForSwitchback" type="int" default="10">
+  Packet loss difference threshold to immediately switch back to lower quality.
+</ParamField>
+
+<ParamField path="rttMeasurementDiffThresholdForSwitchback" type="int" default="20">
+  RTT measurement difference threshold to immediately switch back to lower quality.
+</ParamField>
+
+## Preview/Thumbnail Settings
+
+<ParamField path="createPreviewPeriod" type="int" default="5000">
+  Period in milliseconds for creating preview images. Files are created in `<APP_DIR>/preview` directory.
+</ParamField>
+
+<ParamField path="previewOverwrite" type="boolean" default="false">
+  If true, new stream previews with the same ID overwrite existing files. If false, previous files are saved with a suffix.
+</ParamField>
+
+<ParamField path="previewHeight" type="int" default="480">
+  Height in pixels of the preview image.
+</ParamField>
+
+<ParamField path="generatePreview" type="boolean" default="false">
+  Generate preview images if adaptive bitrate settings exist.
+</ParamField>
+
+<ParamField path="previewFormat" type="string" default="png">
+  Preview image format. Can be "png", "jpg", or "webp".
+</ParamField>
+
+<ParamField path="previewQuality" type="int" default="75">
+  Preview quality for JPG and WEBP formats.
+  - **JPG:** 2-31 (2 = best quality, 31 = worst quality). Recommended: 5
+  - **WEBP:** 0-100 (0 = worst quality, 100 = best quality). Recommended: 75
+</ParamField>
+
+## Stream Sources
+
+<ParamField path="restartStreamFetcherPeriod" type="int" default="0">
+  Period in seconds for automatically restarting stream fetchers. 0 means disabled.
+</ParamField>
+
+<ParamField path="startStreamFetcherAutomatically" type="boolean" default="false">
+  Automatically start stream sources when server starts.
+</ParamField>
+
+<ParamField path="streamFetcherBufferTime" type="int" default="0">
+  Buffer time in milliseconds for stream fetchers. 0 means no buffer.
+</ParamField>
+
+<ParamField path="rtspPullTransportType" type="string" default="3">
+  RTSP transport type for pulling streams. Can be string or integer (OR combination):
+  - "udp" or `1`
+  - "tcp" or `2`
+  - "udp_multicast" or `4`
+  - "http" or `256`
+  - "https" or `512`
+  
+  Default is `3` (udp OR tcp).
+</ParamField>
+
+<ParamField path="rtspTimeoutDurationMs" type="int" default="5000">
+  Timeout in milliseconds for RTSP connections.
+</ParamField>
+
+<ParamField path="maxAnalyzeDurationMS" type="int" default="1500">
+  Maximum analyze duration in milliseconds for determining video and audio existence in RTMP, SRT, and stream sources.
+</ParamField>
+
+## Stream Limits
+
+<ParamField path="maxFpsAccept" type="int" default="0">
+  Maximum acceptable FPS for incoming streams. 0 means no limit.
+</ParamField>
+
+<ParamField path="maxResolutionAccept" type="int" default="0">
+  Maximum acceptable resolution for incoming streams. 0 means no limit.
+</ParamField>
+
+<ParamField path="maxBitrateAccept" type="int" default="0">
+  Maximum acceptable bitrate for incoming streams. 0 means no limit.
+</ParamField>
+
+<ParamField path="ingestingStreamLimit" type="int" default="-1">
+  Application-level total incoming stream limit. -1 means unlimited.
+</ParamField>
+
+<ParamField path="maxAudioTrackCount" type="int" default="-1">
+  Maximum audio tracks in a multitrack playing connection. -1 means unlimited.
+</ParamField>
+
+<ParamField path="maxVideoTrackCount" type="int" default="-1">
+  Maximum video tracks in a multitrack playing connection. -1 means unlimited.
+</ParamField>
+
+## Data Channel
+
+<ParamField path="dataChannelEnabled" type="boolean" default="true">
+  Enable/disable WebRTC data channel. When enabled, publishers can send messages to players.
+</ParamField>
+
+<ParamField path="dataChannelPlayerDistribution" type="string" default="all">
+  Distribution mode for player messages:
+  - `"none"`: Player messages are delivered to nobody
+  - `"publisher"`: Player messages are delivered only to publisher
+  - `"all"`: Player messages are delivered to everyone (publisher and all players)
+</ParamField>
+
+<ParamField path="dataChannelWebHookURL" type="string" default="">
+  Webhook URL for data channel messages. All data channel messages are also sent to this endpoint.
+</ParamField>
+
+<ParamField path="sendAudioLevelToViewers" type="boolean" default="false">
+  Send audio level information from RTP headers to viewers via data channel. Useful for video conferencing to detect active speakers.
+</ParamField>
+
+<ParamField path="audioLevelThreshold" type="int" default="120">
+  Audio level threshold for assigning audio tracks in limited track conferences. Range: 0-127 (0 = max level, 127 = silent).
+</ParamField>
+
+## Webhooks
+
+<ParamField path="listenerHookURL" type="string" default="">
+  Webhook URL for event notifications. See [Webhook Integration](https://antmedia.io/webhook-integration/) for details.
+</ParamField>
+
+<ParamField path="webhookAuthenticateURL" type="string" default="">
+  Webhook URL for authentication when publishing streams.
+</ParamField>
+
+<ParamField path="webhookPlayAuthUrl" type="string" default="">
+  Webhook URL for WebRTC play authentication.
+</ParamField>
+
+<ParamField path="webhookRetryCount" type="int" default="0">
+  Number of retry attempts on webhook POST failure.
+</ParamField>
+
+<ParamField path="webhookRetryDelay" type="long" default="1000">
+  Delay in milliseconds between webhook retry attempts.
+</ParamField>
+
+<ParamField path="webhookStreamStatusUpdatePeriodMs" type="long" default="-1">
+  Period in milliseconds for sending stream status updates to webhook. -1 means disabled. Minimum recommended: 5000ms.
+</ParamField>
+
+<ParamField path="webhookContentType" type="string" default="application/json">
+  Content type for webhook POST requests. For backward compatibility, can be set to "application/x-www-form-urlencoded".
+</ParamField>
+
+## Scripts
+
+<ParamField path="muxerFinishScript" type="string" default="">
+  Path to bash script called when muxing finishes.
+</ParamField>
+
+<ParamField path="streamStartedScript" type="string" default="">
+  Path to bash script called when streaming starts.
+</ParamField>
+
+<ParamField path="streamEndedScript" type="string" default="">
+  Path to bash script called when stream ends.
+</ParamField>
+
+<ParamField path="streamIdleTimeoutScript" type="string" default="">
+  Path to bash script called when stream idle timeout occurs.
+</ParamField>
+
+<ParamField path="vodUploadFinishScript" type="string" default="">
+  Path to bash script called when VoD upload finishes.
+</ParamField>
+
+## Storage
+
+<ParamField path="subFolder" type="string" default="">
+  Subfolder path for storing media files. Supports placeholders:
+  - `%m`: Main track ID
+  - `%s`: Stream ID
+  
+  **Examples:**
+  - `"%m"` → streams/mainTrackId/0001.ts
+  - `"myStreams/%m/%s"` → streams/myStreams/mainTrackId/streamId/0001.ts
+</ParamField>
+
+<ParamField path="recordingSubfolder" type="string" default="null">
+  Subfolder for recording files (MP4 and WebM).
+</ParamField>
+
+### VoD Settings
+
+<ParamField path="vodFolder" type="string" default="">
+  Directory for VoD files. Deprecated - use VoD import REST API instead.
+</ParamField>
+
+## Access Control
+
+<ParamField path="acceptOnlyStreamsInDataStore" type="boolean" default="false">
+  Only accept streams that are pre-registered in the database. Streams must be added via REST API before publishing.
+</ParamField>
+
+<ParamField path="acceptOnlyRoomsInDataStore" type="boolean" default="false">
+  Only accept rooms that are pre-registered in the database.
+</ParamField>
+
+<ParamField path="playWebRTCStreamOnceForEachSession" type="boolean" default="true">
+  Prevent playing the same stream ID more than once in the same WebRTC session.
+</ParamField>
+
+## Multitrack & Conference
+
+<ParamField path="participantVisibilityMatrix" type="object" default="{...}">
+  Visibility matrix defining which participant roles can see each other in conferences.
+  
+  **Default configuration:**
+  ```json
+  {
+    "default": ["default"],
+    "speaker": ["speaker", "active_attendee"],
+    "attendee": ["speaker", "active_attendee"],
+    "active_attendee": ["active_attendee", "speaker"]
+  }
+  ```
+</ParamField>
+
+## RTMP Settings
+
+<ParamField path="rtmpIngestBufferTimeMs" type="long" default="0">
+  RTMP ingesting buffer time in milliseconds. Server buffers this amount of video to compensate for stream interruptions.
+</ParamField>
+
+<ParamField path="rtmpPlaybackEnabled" type="boolean" default="false">
+  Enable RTMP playback. Note: RTMP playback is deprecated and will be removed. Use CMAF/DASH instead.
+</ParamField>
+
+<ParamField path="heightRtmpForwarding" type="int" default="360">
+  Height of the stream transcoded from WebRTC to RTMP forwarding.
+</ParamField>
+
+<ParamField path="relayRTMPMetaDataToMuxers" type="boolean" default="true">
+  Relay RTMP metadata to muxers for playback synchronization.
+</ParamField>
+
+## SRT Settings
+
+<ParamField path="srtReceiveLatencyInMs" type="int" default="150">
+  Time in milliseconds to wait for SRT packets to be received.
+</ParamField>
+
+## Misc Settings
+
+<ParamField path="writeStatsToDatastore" type="boolean" default="true">
+  Write viewer statistics (HLS, WebRTC) to the datastore.
+</ParamField>
+
+<ParamField path="writeSubscriberEventsToDatastore" type="boolean" default="false">
+  Write subscriber connect/disconnect events to datastore. Alternatively available in analytics logs.
+</ParamField>
+
+<ParamField path="remoteAllowedCIDR" type="string" default="127.0.0.1">
+  Comma-separated CIDR addresses allowed to access REST API. Must be in CIDR format (a.b.c.d/x).
+</ParamField>
+
+<ParamField path="allowedPublisherCIDR" type="string" default="">
+  Comma-separated CIDR addresses allowed to publish streams. Empty means accept from everywhere.
+</ParamField>
+
+<ParamField path="httpForwardingExtension" type="string" default="">
+  Forward HTTP requests with these extensions to httpForwardingBaseURL. Comma-separated (e.g., "mp4,m3u8").
+</ParamField>
+
+<ParamField path="httpForwardingBaseURL" type="string" default="">
+  Base URL for forwarding HTTP requests.
+</ParamField>
+
+<ParamField path="contentSecurityPolicyHeaderValue" type="string" default="">
+  Value for Content-Security-Policy HTTP response header to reduce XSS risks.
+</ParamField>
+
+<ParamField path="originEdgeIdleTimeout" type="int" default="2">
+  Maximum idle time in seconds between origin and edge connection before re-establishing.
+</ParamField>
+
+<ParamField path="id3TagEnabled" type="boolean" default="false">
+  Enable ID3 tag support for HLS.
+</ParamField>
+
+<ParamField path="encodingQueueSize" type="int" default="150">
+  Size of encoding queue for frames waiting to be encoded (default: 5 seconds of 30fps stream).
+</ParamField>
+
+<ParamField path="customSettings" type="object" default="{}">
+  Custom key-value settings for application-specific configuration.
+</ParamField>

@@ -1,0 +1,314 @@
+---
+title: Token-Based Access Control
+description: Implement token-based authentication to secure stream publishing and playback in Ant Media Server
+---
+
+## Overview
+
+Token-based access control allows you to restrict who can publish or play streams using unique, time-limited tokens. This is one of the most common security mechanisms in Ant Media Server.
+
+## How Token Authentication Works
+
+The token authentication flow in Ant Media Server:
+
+1. Client requests a token from your application backend
+2. Backend generates a token using Ant Media Server REST API
+3. Backend returns the token to the client
+4. Client includes the token when publishing or playing a stream
+5. Ant Media Server validates the token before allowing access
+
+## Token Filter Manager
+
+The `TokenFilterManager` class (`filter/TokenFilterManager.java:26`) handles all token validation for HTTP requests.
+
+### Request Flow
+
+When a client makes a request with a token:
+
+```java
+// Extract token from request
+String tokenId = request.getParameter("token");
+String sessionId = httpRequest.getSession().getId();
+String streamId = getStreamId(httpRequest.getRequestURI());
+
+// Validate token
+if (!tokenService.checkToken(tokenId, streamId, sessionId, Token.PLAY_TOKEN)) {
+    httpResponse.sendError(HttpServletResponse.SC_FORBIDDEN, "Invalid Token");
+    return;
+}
+```
+
+### Stream ID Extraction
+
+The token filter automatically extracts stream IDs from various URL formats:
+
+- HLS: `streams/{streamId}.m3u8`
+- HLS with ABR: `streams/{streamId}_720p.m3u8`
+- DASH: `streams/{streamId}.mpd`
+- MP4 VOD: `streams/{streamId}.mp4`
+- TS segments: `streams/{streamId}0001.ts`
+
+See `filter/TokenFilterManager.java:172-374` for complete stream ID parsing logic.
+
+## Enabling Token Control
+
+Configure token authentication in your application settings:
+
+### For Playback
+
+```java
+appSettings.setPlayTokenControlEnabled(true);
+```
+
+Or via REST API:
+
+```bash
+curl -X PUT "https://your-server/rest/v2/applications/settings/LiveApp" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "playTokenControlEnabled": true
+  }'
+```
+
+### For Publishing
+
+Publish token control is typically enabled alongside play control:
+
+```bash
+curl -X PUT "https://your-server/rest/v2/applications/settings/LiveApp" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "publishTokenControlEnabled": true
+  }'
+```
+
+## Creating Tokens
+
+### Using REST API
+
+Create a token for a specific stream:
+
+```bash
+curl -X POST "https://your-server/rest/v2/broadcasts/{streamId}/token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "play",
+    "expireDate": 1735689600000,
+    "roomId": ""
+  }'
+```
+
+Response:
+
+```json
+{
+  "tokenId": "abc123def456",
+  "streamId": "stream1",
+  "expireDate": 1735689600000,
+  "type": "play"
+}
+```
+
+### Using ITokenService Interface
+
+Programmatically create tokens:
+
+```java
+ITokenService tokenService = getTokenService();
+
+// Create a play token that expires in 1 hour
+long expireDate = System.currentTimeMillis() + (60 * 60 * 1000);
+Token token = tokenService.createToken(
+    "stream1",           // streamId
+    expireDate,          // expiration timestamp
+    Token.PLAY_TOKEN,    // token type
+    null                 // roomId (optional)
+);
+
+String tokenId = token.getTokenId();
+```
+
+## Using Tokens
+
+### HLS Playback
+
+Add the token as a query parameter:
+
+```
+https://your-server/LiveApp/streams/stream1.m3u8?token=abc123def456
+```
+
+### DASH Playback
+
+```
+https://your-server/LiveApp/streams/stream1.mpd?token=abc123def456
+```
+
+### WebRTC Publishing
+
+Pass the token in the publish request:
+
+```javascript
+webRTCAdaptor.publish(streamId, token);
+```
+
+### WebRTC Playback
+
+```javascript
+webRTCAdaptor.play(streamId, token);
+```
+
+## Token Validation Process
+
+The token validation workflow (`filter/TokenFilterManager.java:138-142`):
+
+1. **Extract Parameters**: Get token, streamId, and sessionId from request
+2. **Check Security Settings**: Determine which security method is enabled
+3. **Validate Token**: Call appropriate validation method
+4. **Allow or Deny**: Grant access or return 403 Forbidden
+
+### Validation Logic
+
+```java
+if (appSettings.isPlayTokenControlEnabled() && 
+    !tokenService.checkToken(tokenId, streamId, sessionId, Token.PLAY_TOKEN)) {
+    httpResponse.sendError(HttpServletResponse.SC_FORBIDDEN, 
+                          "Invalid Token for streamId:" + streamId);
+    return;
+}
+```
+
+## Token Security Features
+
+### Session Binding
+
+Tokens are bound to HTTP session IDs, preventing token reuse across different sessions:
+
+```java
+String sessionId = httpRequest.getSession().getId();
+boolean valid = tokenService.checkToken(tokenId, streamId, sessionId, type);
+```
+
+### Stream Binding
+
+Tokens are valid only for the specific stream they were created for:
+
+```java
+Token token = createToken("stream1", expireDate, type, roomId);
+// This token cannot be used for "stream2"
+```
+
+### Expiration
+
+All tokens have an expiration timestamp. Expired tokens are automatically rejected.
+
+## Room Tokens
+
+For conference room scenarios, create tokens for room access:
+
+```java
+Token roomToken = tokenService.createToken(
+    null,              // streamId (null for room)
+    expireDate,
+    Token.PLAY_TOKEN,
+    "room123"          // roomId
+);
+```
+
+Room tokens grant access to all streams within the specified room.
+
+## Security Considerations
+
+<Warning>
+  Never generate tokens on the client side. Tokens should always be created server-side to protect your secret key.
+</Warning>
+
+<Warning>
+  Use short expiration times (e.g., 1-24 hours) for tokens. Longer validity periods increase security risk if tokens are compromised.
+</Warning>
+
+<Warning>
+  Sanitize all input parameters. The TokenFilterManager sanitizes inputs using `replaceAll(RestServiceBase.REPLACE_CHARS, "_")` to prevent injection attacks.
+</Warning>
+
+<Warning>
+  Monitor failed authentication attempts. Repeated failures may indicate an attack and should trigger alerts or IP blocking.
+</Warning>
+
+## Cluster Mode Support
+
+In cluster deployments, edge nodes need to fetch content from origin nodes. The token filter supports internal cluster authentication:
+
+```java
+String jwtInternalToken = httpRequest.getHeader("ClusterAuthorization");
+if (jwtInternalToken != null) {
+    boolean valid = tokenService.isJwtTokenValid(
+        jwtInternalToken,
+        appSettings.getClusterCommunicationKey(),
+        streamId,
+        Token.PLAY_TOKEN
+    );
+}
+```
+
+This allows edge-to-origin communication without user tokens (see `filter/TokenFilterManager.java:95-113`).
+
+## Combining with Other Security Methods
+
+Token authentication can be combined with:
+
+- **Hash Authentication**: Enable both for dual validation
+- **TOTP**: Use time-based codes alongside tokens
+- **IP Filtering**: Restrict token usage to specific IP ranges
+- **JWT**: Use JWT tokens instead of simple tokens
+
+### Security Priority
+
+The token filter checks security methods in this order:
+
+1. TOTP (Time-based subscriber)
+2. Token authentication
+3. Hash authentication
+4. JWT authentication
+
+See `filter/TokenFilterManager.java:131-154` for the complete validation sequence.
+
+## Troubleshooting
+
+### Token Not Working
+
+1. Verify token control is enabled in AppSettings
+2. Check token expiration date
+3. Ensure streamId matches exactly
+4. Verify the token type (play vs. publish)
+5. Check server logs for validation errors
+
+### 403 Forbidden Errors
+
+Common causes:
+
+- Expired token
+- Wrong streamId
+- Token not properly URL-encoded
+- Session mismatch
+- Token service not initialized
+
+### Server Initialization
+
+If you receive "Not initialized" errors, the token service may still be starting:
+
+```java
+if (tokenServiceTmp == null) {
+    httpResponse.sendError(HttpServletResponse.SC_FORBIDDEN, 
+                          TokenFilterManager.NOT_INITIALIZED);
+    return;
+}
+```
+
+Wait for the server to fully initialize before making requests.
+
+## Next Steps
+
+- [JWT Tokens](/security/jwt-tokens) - Use JWT for stateless authentication
+- [IP Filtering](/security/ip-filtering) - Add IP-based access control
+- [Authentication Overview](/security/authentication) - Learn about all authentication methods

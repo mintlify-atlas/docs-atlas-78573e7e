@@ -1,0 +1,589 @@
+---
+title: Installation
+description: Complete installation guide for Ant Media Server on Linux. Learn about system requirements, installation methods, configuration options, and post-installation setup.
+---
+
+Ant Media Server runs on Linux and requires Java 17. This guide covers installation on Ubuntu, CentOS, and other Linux distributions.
+
+## System requirements
+
+Before installing Ant Media Server, ensure your system meets these requirements:
+
+### Minimum requirements
+
+- **Operating System**: Ubuntu 18.04+, CentOS 7+, or compatible Linux distribution
+- **CPU**: 2 cores (4+ cores recommended for production)
+- **RAM**: 4 GB (8+ GB recommended for production)
+- **Disk Space**: 10 GB free space
+- **Java**: OpenJDK 17
+- **Network**: Open ports 5080 (HTTP), 5443 (HTTPS), 1935 (RTMP), 5000-65000 (UDP for WebRTC)
+
+### Recommended production requirements
+
+- **CPU**: 8+ cores
+- **RAM**: 16+ GB
+- **Network**: 1 Gbps connection
+- **Storage**: SSD with 100+ GB
+
+<Note>
+  Resource usage scales with concurrent streams. For high-traffic deployments, consider [cluster mode](#cluster-mode) for horizontal scaling.
+</Note>
+
+## Installation on Linux
+
+### Quick installation
+
+The fastest way to install Ant Media Server is using the official installation script:
+
+```bash
+# Download the latest release
+wget https://github.com/ant-media/Ant-Media-Server/releases/latest/download/ant-media-server.zip
+
+# Extract the archive
+unzip ant-media-server.zip
+cd ant-media-server
+
+# Run the installation script
+sudo bash install_ant-media-server.sh
+```
+
+The installation script will:
+
+1. Create an `antmedia` user and group
+2. Install files to `/usr/local/antmedia`
+3. Configure systemd service
+4. Set up log directory at `/var/log/antmedia`
+5. Start the service automatically
+
+<Tip>
+  The default installation directory is `/usr/local/antmedia`. All commands in this guide assume this path.
+</Tip>
+
+### Installation with options
+
+You can customize the installation by starting the server with specific options:
+
+```bash
+cd /usr/local/antmedia
+sudo ./start.sh [OPTIONS]
+```
+
+#### Available options
+
+<ParamField path="-g" type="boolean" default="false">
+  Use global (public) IP in network communication
+</ParamField>
+
+<ParamField path="-s" type="boolean" default="false">
+  Use public IP as server name
+</ParamField>
+
+<ParamField path="-r" type="boolean" default="false">
+  Replace candidate address with server name
+</ParamField>
+
+<ParamField path="-m" type="string">
+  Server mode: `standalone` or `cluster`
+</ParamField>
+
+<ParamField path="-h" type="string">
+  MongoDB or Redis connection string (e.g., `mongodb://username:password@host:port` or `redis://username:password@host:port`)
+</ParamField>
+
+<ParamField path="-l" type="string">
+  License key for Enterprise Edition
+</ParamField>
+
+<ParamField path="-a" type="string">
+  TURN/STUN server URL (e.g., `stun:stun.l.google.com:19302` or `turn:turn.example.com:3478`)
+</ParamField>
+
+<ParamField path="-j" type="string" default="-Xms1g">
+  JVM memory options (e.g., `-Xms2g -Xmx8g`)
+</ParamField>
+
+<ParamField path="-c" type="number" default="75">
+  CPU limit percentage (server reports high resource usage above this threshold)
+</ParamField>
+
+<ParamField path="-e" type="number" default="75">
+  Memory limit percentage (server reports high resource usage above this threshold)
+</ParamField>
+
+#### Example configurations
+
+<CodeGroup>
+  ```bash Standalone with custom memory
+  sudo ./start.sh -j "-Xms2g -Xmx8g"
+  ```
+
+  ```bash Cluster mode with MongoDB
+  sudo ./start.sh -m cluster \
+    -h "mongodb://admin:password@mongodb-host:27017/antmedia"
+  ```
+
+  ```bash With TURN server
+  sudo ./start.sh \
+    -a "turn:turn.example.com:3478" \
+    -n "turnuser" \
+    -w "turnpassword"
+  ```
+
+  ```bash Production with all options
+  sudo ./start.sh \
+    -g true \
+    -s true \
+    -j "-Xms4g -Xmx16g" \
+    -c 80 \
+    -e 80 \
+    -m cluster \
+    -h "mongodb://admin:password@mongodb-host:27017/antmedia"
+  ```
+</CodeGroup>
+
+## Systemd service configuration
+
+Ant Media Server runs as a systemd service. The service file is located at `/lib/systemd/system/antmedia.service`.
+
+### Service management
+
+```bash
+# Start the service
+sudo systemctl start antmedia
+
+# Stop the service
+sudo systemctl stop antmedia
+
+# Restart the service
+sudo systemctl restart antmedia
+
+# Check status
+sudo systemctl status antmedia
+
+# Enable auto-start on boot
+sudo systemctl enable antmedia
+
+# View logs
+sudo journalctl -u antmedia -f
+```
+
+### Environment variables
+
+You can configure JVM memory options by editing the service file:
+
+```bash
+sudo nano /lib/systemd/system/antmedia.service
+```
+
+Modify the `JVM_MEMORY_OPTIONS` environment variable:
+
+```ini
+[Service]
+Environment=JVM_MEMORY_OPTIONS=-Xms4g -Xmx16g
+Environment=JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+```
+
+After modifying, reload and restart:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart antmedia
+```
+
+<Warning>
+  Always ensure `Xms` (initial heap) is less than or equal to `Xmx` (maximum heap). Setting `Xms` equal to `Xmx` can improve performance by avoiding dynamic heap resizing.
+</Warning>
+
+## Server configuration
+
+The main configuration file is located at `/usr/local/antmedia/conf/red5.properties`.
+
+### Key configuration options
+
+```properties
+# Server identification
+server.name=
+server.licence_key=
+
+# HTTP/HTTPS ports
+http.host=0.0.0.0
+http.port=5080
+https.port=5443
+
+# RTMP configuration
+rtmp.host=0.0.0.0
+rtmp.port=1935
+
+# Resource limits
+server.cpu_limit=75
+server.memory_limit_percentage=75
+
+# Logging
+logLevel=INFO
+nativeLogLevel=ERROR
+
+# Network settings
+useGlobalIp=false
+```
+
+### Common configuration tasks
+
+<AccordionGroup>
+  <Accordion title="Change HTTP/HTTPS ports">
+    Edit `/usr/local/antmedia/conf/red5.properties`:
+
+    ```properties
+    http.port=8080
+    https.port=8443
+    ```
+
+    Restart the service:
+
+    ```bash
+    sudo systemctl restart antmedia
+    ```
+  </Accordion>
+
+  <Accordion title="Configure resource limits">
+    Adjust CPU and memory thresholds to prevent resource exhaustion:
+
+    ```properties
+    server.cpu_limit=80
+    server.memory_limit_percentage=80
+    server.cpu_measurement_period_ms=1000
+    server.cpu_measurement_window_size=5
+    ```
+
+    These settings prevent the server from accepting new streams when resources are constrained.
+  </Accordion>
+
+  <Accordion title="Enable global IP for NAT environments">
+    For servers behind NAT or load balancers:
+
+    ```bash
+    sudo ./start.sh -g true -s true
+    ```
+
+    Or in `red5.properties`:
+
+    ```properties
+    useGlobalIp=true
+    server.name=your.public.ip.address
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Enable SSL
+
+SSL/TLS is required for WebRTC in production. Ant Media Server includes a built-in SSL configuration script.
+
+### Automatic SSL with Let's Encrypt
+
+```bash
+cd /usr/local/antmedia
+sudo ./enable_ssl.sh -d yourdomain.com -e your@email.com
+```
+
+This script will:
+1. Install Certbot if not present
+2. Obtain certificates from Let's Encrypt
+3. Configure Ant Media Server to use the certificates
+4. Set up automatic renewal
+
+### Manual SSL configuration
+
+If you have your own certificates:
+
+```bash
+# Copy your certificates to the conf directory
+sudo cp fullchain.pem /usr/local/antmedia/conf/
+sudo cp privkey.pem /usr/local/antmedia/conf/
+sudo cp chain.pem /usr/local/antmedia/conf/
+
+# Set ownership
+sudo chown antmedia:antmedia /usr/local/antmedia/conf/*.pem
+
+# Update red5.properties
+sudo nano /usr/local/antmedia/conf/red5.properties
+```
+
+Verify these settings:
+
+```properties
+http.ssl_certificate_file=conf/fullchain.pem
+http.ssl_certificate_chain_file=conf/chain.pem
+http.ssl_certificate_key_file=conf/privkey.pem
+```
+
+Restart the service:
+
+```bash
+sudo systemctl restart antmedia
+```
+
+<Tip>
+  After enabling SSL, access the dashboard at `https://yourdomain.com:5443`
+</Tip>
+
+## Cluster mode
+
+For high-availability and scaling, you can run Ant Media Server in cluster mode using MongoDB or Redis.
+
+### Prerequisites
+
+- MongoDB 4.0+ or Redis 6.0+
+- Multiple Ant Media Server instances
+- Load balancer (recommended)
+
+### Configuration
+
+1. **Set up MongoDB or Redis**:
+
+```bash
+# Example MongoDB connection string
+mongodb://username:password@mongodb-host:27017/antmedia
+
+# Example Redis connection string
+redis://username:password@redis-host:6379
+```
+
+2. **Start server in cluster mode**:
+
+```bash
+sudo ./start.sh -m cluster -h "mongodb://admin:password@mongodb-host:27017/antmedia"
+```
+
+3. **Verify cluster status**:
+
+Check the dashboard or use the REST API:
+
+```bash
+curl http://localhost:5080/rest/v2/server-status
+```
+
+<Note>
+  All servers in the cluster must use the same database connection string and license key.
+</Note>
+
+## Post-installation verification
+
+After installation, verify everything is working correctly:
+
+### Check service status
+
+```bash
+sudo systemctl status antmedia
+```
+
+Expected output:
+```
+● antmedia.service - Ant Media Server
+   Loaded: loaded (/lib/systemd/system/antmedia.service)
+   Active: active (running)
+```
+
+### Verify ports are listening
+
+```bash
+sudo netstat -tlnp | grep java
+```
+
+You should see:
+- Port 5080 (HTTP)
+- Port 5443 (HTTPS)
+- Port 1935 (RTMP)
+
+### Access the dashboard
+
+Open your browser:
+
+```
+http://your-server-ip:5080
+```
+
+### Check logs
+
+```bash
+# Application logs
+tail -f /var/log/antmedia/antmedia-error.log
+
+# Service logs
+sudo journalctl -u antmedia -f
+```
+
+### Test streaming
+
+Use the pre-installed `LiveApp` application:
+
+```bash
+# Publish a test stream with FFmpeg
+ffmpeg -re -f lavfi -i testsrc=size=1280x720:rate=30 \
+  -f lavfi -i sine=frequency=1000:sample_rate=44100 \
+  -c:v libx264 -c:a aac -f flv \
+  rtmp://localhost/LiveApp/test
+```
+
+Play the stream:
+```
+http://localhost:5080/LiveApp/play.html?name=test
+```
+
+## Cloud deployment options
+
+Ant Media Server is available on major cloud platforms:
+
+<CardGroup cols={3}>
+  <Card title="AWS" icon="aws" href="https://aws.amazon.com/marketplace/pp/prodview-464ritgzkzod6">
+    Deploy on Amazon Web Services
+  </Card>
+  <Card title="Azure" icon="microsoft" href="https://azuremarketplace.microsoft.com/en-us/marketplace/apps/antmedia.ant_media_server_enterprise">
+    Deploy on Microsoft Azure
+  </Card>
+  <Card title="Google Cloud" icon="google" href="https://console.cloud.google.com/marketplace/product/antmedia-public/ant-media-server-enterprise-edition">
+    Deploy on Google Cloud Platform
+  </Card>
+</CardGroup>
+
+### AWS CloudFormation
+
+For auto-scaling clusters on AWS:
+
+```bash
+# Download the CloudFormation template
+wget https://raw.githubusercontent.com/ant-media/Ant-Media-Server/master/cloudformation/antmedia-aws-autoscaling-template.yaml
+
+# Deploy using AWS CLI
+aws cloudformation create-stack \
+  --stack-name antmedia-cluster \
+  --template-body file://antmedia-aws-autoscaling-template.yaml \
+  --parameters ParameterKey=KeyName,ParameterValue=your-key-pair
+```
+
+<Tip>
+  Check out the [5-minute auto-scaling guide](https://antmedia.io/docs/guides/clustering-and-scaling/aws/scale-with-aws-cloudformation/) for detailed CloudFormation setup.
+</Tip>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Service fails to start">
+    Check Java installation:
+
+    ```bash
+    java -version
+    # Expected: OpenJDK 17
+    ```
+
+    Verify log directory permissions:
+
+    ```bash
+    sudo mkdir -p /var/log/antmedia
+    sudo chown antmedia:antmedia /var/log/antmedia
+    ```
+
+    Check for port conflicts:
+
+    ```bash
+    sudo netstat -tlnp | grep -E '5080|5443|1935'
+    ```
+  </Accordion>
+
+  <Accordion title="Cannot access dashboard">
+    Verify the service is running:
+
+    ```bash
+    sudo systemctl status antmedia
+    ```
+
+    Check firewall rules:
+
+    ```bash
+    # Ubuntu/Debian
+    sudo ufw allow 5080/tcp
+    sudo ufw allow 5443/tcp
+    
+    # CentOS/RHEL
+    sudo firewall-cmd --permanent --add-port=5080/tcp
+    sudo firewall-cmd --permanent --add-port=5443/tcp
+    sudo firewall-cmd --reload
+    ```
+
+    Check if the port is listening:
+
+    ```bash
+    curl http://localhost:5080
+    ```
+  </Accordion>
+
+  <Accordion title="WebRTC not working">
+    WebRTC requires HTTPS. Verify SSL is configured:
+
+    ```bash
+    ls -l /usr/local/antmedia/conf/*.pem
+    ```
+
+    Open UDP ports for WebRTC:
+
+    ```bash
+    # Ubuntu/Debian
+    sudo ufw allow 5000:65000/udp
+    
+    # CentOS/RHEL
+    sudo firewall-cmd --permanent --add-port=5000-65000/udp
+    sudo firewall-cmd --reload
+    ```
+
+    Configure STUN/TURN server in application settings:
+
+    ```bash
+    sudo ./start.sh -a "stun:stun.l.google.com:19302"
+    ```
+  </Accordion>
+
+  <Accordion title="High CPU or memory usage">
+    Adjust resource limits in `/usr/local/antmedia/conf/red5.properties`:
+
+    ```properties
+    server.cpu_limit=80
+    server.memory_limit_percentage=80
+    ```
+
+    Increase JVM heap size:
+
+    ```bash
+    # Edit systemd service
+    sudo systemctl edit antmedia
+    ```
+
+    Add:
+
+    ```ini
+    [Service]
+    Environment=JVM_MEMORY_OPTIONS=-Xms8g -Xmx16g
+    ```
+
+    Reload and restart:
+
+    ```bash
+    sudo systemctl daemon-reload
+    sudo systemctl restart antmedia
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+- [Configure applications](https://antmedia.io/docs) and stream settings
+- [Set up adaptive bitrate streaming](https://antmedia.io/docs) for optimal quality
+- [Configure authentication](https://antmedia.io/docs) and security
+- [Monitor server metrics](https://antmedia.io/docs) and performance
+- [Integrate with your application](https://antmedia.io/docs) using REST API
+
+## Getting help
+
+If you encounter issues:
+
+- [GitHub Discussions](https://github.com/orgs/ant-media/discussions) - Community support
+- [GitHub Issues](https://github.com/ant-media/Ant-Media-Server/issues) - Report bugs
+- [Documentation](https://antmedia.io/docs) - Comprehensive guides
+- [support@antmedia.io](mailto:support@antmedia.io) - Enterprise support

@@ -1,0 +1,482 @@
+---
+title: JWT Token Authentication
+description: Implement JWT (JSON Web Token) authentication for stateless, scalable security in Ant Media Server
+---
+
+## Overview
+
+JWT (JSON Web Token) authentication provides a stateless, scalable authentication mechanism for Ant Media Server. Unlike traditional tokens, JWTs are self-contained and cryptographically signed, eliminating the need for server-side token storage.
+
+## JWT Filter
+
+The `JWTFilter` class (`filter/JWTFilter.java:31`) handles JWT validation for REST API endpoints and streaming requests.
+
+### How JWT Filter Works
+
+```java
+public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) {
+    String jwtToken = httpRequest.getHeader("Authorization");
+    
+    // Extract Bearer token
+    if (jwtToken != null && jwtToken.toLowerCase().startsWith("bearer")) {
+        jwtToken = jwtToken.substring("Bearer".length()).trim();
+    }
+    
+    // Validate JWT
+    if (!appSettings.isJwtControlEnabled() || checkJWT(jwtToken)) {
+        chain.doFilter(request, response);
+    } else {
+        response.sendError(HttpServletResponse.SC_FORBIDDEN, "Invalid App JWT Token");
+    }
+}
+```
+
+## Enabling JWT Authentication
+
+### Via REST API
+
+```bash
+curl -X PUT "https://your-server/rest/v2/applications/settings/LiveApp" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jwtControlEnabled": true,
+    "jwtSecretKey": "your-secret-key-min-32-chars"
+  }'
+```
+
+### Enable for Streaming
+
+For stream-level JWT authentication:
+
+```bash
+curl -X PUT "https://your-server/rest/v2/applications/settings/LiveApp" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "playJwtControlEnabled": true,
+    "jwtSecretKey": "your-secret-key-min-32-chars"
+  }'
+```
+
+## JWT Validation Methods
+
+Ant Media Server supports two JWT validation approaches:
+
+### 1. Secret Key Validation (HMAC-SHA256)
+
+Validate JWTs signed with a shared secret:
+
+```java
+public static boolean isJWTTokenValid(String jwtSecretKey, String jwtToken) {
+    try {
+        Algorithm algorithm = Algorithm.HMAC256(jwtSecretKey);
+        JWTVerifier verifier = JWT.require(algorithm).build();
+        verifier.verify(jwtToken);
+        return true;
+    } catch (JWTVerificationException ex) {
+        logger.error("JWT token is not valid");
+        return false;
+    }
+}
+```
+
+See `filter/JWTFilter.java:105-121` for the implementation.
+
+### 2. JWKS Validation (RSA-256)
+
+Validate JWTs using JSON Web Key Sets (JWKS) with public key cryptography:
+
+```java
+private static boolean isJWKSTokenValid(String jwksURL, String jwtString) {
+    try {
+        DecodedJWT jwt = JWT.decode(jwtString);
+        JwkProvider provider = new UrlJwkProvider(jwksURL);
+        Jwk jwk = provider.get(jwt.getKeyId());
+        Algorithm algorithm = Algorithm.RSA256((RSAPublicKey) jwk.getPublicKey(), null);
+        algorithm.verify(jwt);
+        return true;
+    } catch (JWTVerificationException | JwkException ex) {
+        logger.error(ex.toString());
+        return false;
+    }
+}
+```
+
+See `filter/JWTFilter.java:85-102` for the implementation.
+
+## Configuration
+
+### Using Secret Key
+
+Configure a shared secret for HMAC signing:
+
+```json
+{
+  "jwtControlEnabled": true,
+  "playJwtControlEnabled": true,
+  "jwtSecretKey": "your-very-secure-secret-key-at-least-32-characters"
+}
+```
+
+### Using JWKS URL
+
+Configure a JWKS endpoint for RSA validation:
+
+```json
+{
+  "jwtControlEnabled": true,
+  "playJwtControlEnabled": true,
+  "jwksURL": "https://your-auth-server.com/.well-known/jwks.json"
+}
+```
+
+<Warning>
+  If both `jwksURL` and `jwtSecretKey` are configured, JWKS validation takes precedence. The filter checks JWKS first, then falls back to secret key validation.
+</Warning>
+
+## Generating JWT Tokens
+
+### Basic JWT Token
+
+Generate a JWT with expiration:
+
+```java
+public static String generateJwtToken(String jwtSecretKey, long expireDateUnixTimeStampMs) {
+    Date expireDateType = new Date(expireDateUnixTimeStampMs);
+    Algorithm algorithm = Algorithm.HMAC256(jwtSecretKey);
+    
+    return JWT.create()
+        .withExpiresAt(expireDateType)
+        .sign(algorithm);
+}
+```
+
+See `filter/JWTFilter.java:193-213` for implementation.
+
+### JWT with Issuer
+
+Include an issuer claim:
+
+```java
+String jwtToken = generateJwtToken(
+    "your-secret-key",
+    System.currentTimeMillis() + 3600000,  // 1 hour
+    "ant-media-server"
+);
+```
+
+Validate with issuer check:
+
+```java
+public static boolean isJWTTokenValid(String jwtSecretKey, String jwtToken, String issuer) {
+    Algorithm algorithm = Algorithm.HMAC256(jwtSecretKey);
+    JWTVerifier verifier = JWT.require(algorithm)
+        .withIssuer(issuer)
+        .build();
+    verifier.verify(jwtToken);
+    return true;
+}
+```
+
+See `filter/JWTFilter.java:125-142`.
+
+### JWT with Custom Claims
+
+Add custom claims for fine-grained control:
+
+```java
+public static String generateJwtToken(
+    String jwtSecretKey, 
+    long expireDateUnixTimeStampMs, 
+    String claimName, 
+    String claimValue
+) {
+    Date expireDateType = new Date(expireDateUnixTimeStampMs);
+    Algorithm algorithm = Algorithm.HMAC256(jwtSecretKey);
+    
+    return JWT.create()
+        .withExpiresAt(expireDateType)
+        .withClaim(claimName, claimValue)
+        .sign(algorithm);
+}
+```
+
+Example with subscriber ID:
+
+```java
+String token = generateJwtToken(
+    "secret-key",
+    System.currentTimeMillis() + 3600000,
+    "subscriberId",
+    "user@example.com"
+);
+```
+
+Validate with claim:
+
+```java
+boolean valid = isJWTTokenValid(
+    "secret-key",
+    token,
+    "subscriberId",
+    "user@example.com"
+);
+```
+
+See `filter/JWTFilter.java:156-172` for claim validation.
+
+## Using JWT Tokens
+
+### REST API Requests
+
+Include JWT in the Authorization header:
+
+```bash
+curl -X GET "https://your-server/rest/v2/broadcasts/list/0/10" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+### Stream Playback
+
+Pass JWT as a query parameter:
+
+```
+https://your-server/LiveApp/streams/stream1.m3u8?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+### WebRTC Publishing
+
+```javascript
+const webRTCAdaptor = new WebRTCAdaptor({
+    websocket_url: "wss://your-server/LiveApp/websocket",
+    mediaConstraints: {
+        video: true,
+        audio: true
+    },
+    callback: function(info, obj) {
+        if (info === "initialized") {
+            // Publish with JWT token
+            webRTCAdaptor.publish(
+                streamId, 
+                "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            );
+        }
+    }
+});
+```
+
+## Creating JWT Tokens via REST API
+
+### Stream-Specific JWT
+
+Create a JWT token for a specific stream:
+
+```bash
+curl -X POST "https://your-server/rest/v2/broadcasts/{streamId}/jwt-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "play",
+    "expireDate": 1735689600000,
+    "roomId": ""
+  }'
+```
+
+Response:
+
+```json
+{
+  "tokenId": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdHJlYW1JZCI6InN0cmVhbTEiLCJ0eXBlIjoicGxheSIsImV4cCI6MTczNTY4OTYwMH0.signature",
+  "streamId": "stream1",
+  "expireDate": 1735689600000,
+  "type": "play"
+}
+```
+
+### Using ITokenService
+
+Programmatically create JWT tokens:
+
+```java
+ITokenService tokenService = getTokenService();
+
+long expireDate = System.currentTimeMillis() + (60 * 60 * 1000); // 1 hour
+Token jwtToken = tokenService.createJwtToken(
+    "stream1",          // streamId
+    expireDate,         // expiration
+    Token.PLAY_TOKEN,   // type
+    null                // roomId
+);
+
+String tokenId = jwtToken.getTokenId();
+```
+
+See `security/ITokenService.java:111` for the interface definition.
+
+## JWT Structure
+
+A typical Ant Media Server JWT contains:
+
+### Header
+
+```json
+{
+  "alg": "HS256",
+  "typ": "JWT"
+}
+```
+
+### Payload
+
+```json
+{
+  "streamId": "stream1",
+  "type": "play",
+  "exp": 1735689600,
+  "iat": 1735686000,
+  "subscriberId": "user@example.com"
+}
+```
+
+### Signature
+
+```
+HMACSHA256(
+  base64UrlEncode(header) + "." + base64UrlEncode(payload),
+  secret
+)
+```
+
+## Cluster Communication
+
+In cluster mode, nodes use JWT for internal communication:
+
+```java
+boolean valid = RestProxyFilter.isNodeCommunicationTokenValid(
+    httpRequest.getHeader("ClusterAuthorization"),
+    appSettings.getClusterCommunicationKey(),
+    httpRequest.getRequestURI()
+);
+```
+
+This allows edge nodes to authenticate with origin nodes (see `filter/JWTFilter.java:60-62`).
+
+## Security Best Practices
+
+<Warning>
+  Use a strong secret key of at least 32 characters. Weak secrets can be brute-forced, compromising all your tokens.
+</Warning>
+
+<Warning>
+  Always validate the JWT expiration claim. Expired tokens should be rejected to prevent replay attacks.
+</Warning>
+
+<Warning>
+  Use HTTPS for all communications. JWTs transmitted over HTTP can be intercepted and used by attackers.
+</Warning>
+
+<Warning>
+  Rotate your JWT secret keys periodically. Key rotation limits the impact of potential key compromise.
+</Warning>
+
+<Warning>
+  For production environments, prefer JWKS with RSA-256 over shared secrets. Public key cryptography provides better security for distributed systems.
+</Warning>
+
+## Advantages Over Simple Tokens
+
+### Stateless Authentication
+
+JWTs don't require server-side storage:
+- No database lookups for validation
+- Better scalability in cluster deployments
+- Reduced server memory usage
+
+### Self-Contained Information
+
+JWTs can carry claims about the user:
+- Subscriber ID
+- Permissions
+- Custom metadata
+
+### Cryptographic Security
+
+JWTs are cryptographically signed:
+- Tampering detection
+- Authenticity verification
+- Support for multiple algorithms
+
+### Industry Standard
+
+JWT is a widely adopted standard:
+- Interoperability with OAuth 2.0 / OpenID Connect
+- Extensive library support
+- Well-documented security considerations
+
+## Integration with Third-Party Auth
+
+JWT authentication allows integration with external identity providers:
+
+### Auth0 Integration
+
+1. Configure Auth0 JWKS URL:
+```json
+{
+  "jwksURL": "https://your-tenant.auth0.com/.well-known/jwks.json"
+}
+```
+
+2. Include Auth0 token in requests:
+```javascript
+fetch('https://your-server/rest/v2/broadcasts', {
+    headers: {
+        'Authorization': `Bearer ${auth0Token}`
+    }
+});
+```
+
+### Keycloak Integration
+
+1. Configure Keycloak JWKS:
+```json
+{
+  "jwksURL": "https://keycloak.example.com/realms/your-realm/protocol/openid-connect/certs"
+}
+```
+
+2. Use Keycloak-issued tokens for API access
+
+## Troubleshooting
+
+### Invalid JWT Token Errors
+
+Common causes:
+
+1. **Expired Token**: Check the `exp` claim
+2. **Wrong Secret**: Verify `jwtSecretKey` matches
+3. **Malformed Token**: Ensure proper JWT format (header.payload.signature)
+4. **Algorithm Mismatch**: Verify the signing algorithm
+
+### JWKS Validation Failures
+
+1. **Invalid JWKS URL**: Verify the URL is accessible
+2. **Key ID Mismatch**: Ensure JWT `kid` matches JWKS keys
+3. **Network Issues**: Check connectivity to JWKS endpoint
+4. **Certificate Problems**: Verify SSL certificates are valid
+
+### Missing Authorization Header
+
+Ensure the header format is correct:
+
+```
+Authorization: Bearer <token>
+```
+
+Not:
+```
+Authorization: <token>
+```
+
+## Next Steps
+
+- [Token-Based Access](/security/token-based-access) - Compare with simple token authentication
+- [IP Filtering](/security/ip-filtering) - Add IP-based access control
+- [Authentication Overview](/security/authentication) - Learn about all authentication methods

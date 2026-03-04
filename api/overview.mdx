@@ -1,0 +1,122 @@
+---
+title: "API Overview"
+description: "Introduction to Ant Media Server REST API v2"
+---
+
+## Base URL
+
+The Ant Media Server REST API is accessible at:
+
+```
+https://{host}:{port}/{application}/rest/v2/
+```
+
+**Example:**
+```
+https://test.antmedia.io:5443/LiveApp/rest/v2/
+```
+
+## API Endpoints
+
+Ant Media Server provides the following API endpoint groups:
+
+- **Broadcasts** - `/v2/broadcasts` - Manage live streams, IP cameras, and stream sources
+- **VoD** - `/v2/vods` - Manage video-on-demand files
+- **Push Notifications** - `/v2/push-notification` - Send notifications to subscribers
+- **Cluster** - `/cluster-communication` - Internal cluster node communication (hidden)
+
+## Authentication
+
+Ant Media Server REST API uses JWT (JSON Web Token) authentication. You need to include the JWT token in the `Authorization` header:
+
+```bash
+Authorization: Bearer {your_jwt_token}
+```
+
+### Getting a JWT Token
+
+You can generate JWT tokens for specific streams using the authentication endpoints. Tokens can be created for:
+
+- **Publish** - Allow publishing to a stream
+- **Play** - Allow playing a stream
+- **Room Access** - Allow joining a conference room
+
+See the [Authentication](/api/authentication) page for detailed token generation methods.
+
+## Common Response Format
+
+Most API endpoints return a `Result` object:
+
+```json
+{
+  "success": true,
+  "message": "Operation completed successfully",
+  "dataId": "stream123",
+  "errorId": 0
+}
+```
+
+<ResponseField name="success" type="boolean">
+  Indicates whether the operation was successful
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Human-readable message describing the result
+</ResponseField>
+
+<ResponseField name="dataId" type="string">
+  ID of the created or affected resource
+</ResponseField>
+
+<ResponseField name="errorId" type="integer">
+  Error code if the operation failed (0 for success)
+</ResponseField>
+
+## Common Error Codes
+
+| Code | Description |
+|------|-------------|
+| 200  | Success |
+| 400  | Bad Request - Invalid parameters |
+| 404  | Not Found - Resource does not exist |
+| 500  | Internal Server Error |
+
+## Rate Limits
+
+There are no explicit rate limits, but resource-intensive operations may be throttled based on system load. The server monitors CPU and memory usage and may reject requests with:
+
+```json
+{
+  "success": false,
+  "message": "Resource usage is high",
+  "errorId": -3
+}
+```
+
+## Pagination
+
+List endpoints support pagination with `offset` and `size` parameters:
+
+```bash
+GET /v2/broadcasts/list/{offset}/{size}
+```
+
+- Maximum items per request: **50**
+- Default offset: **0**
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/api/authentication">
+    Learn how to generate and validate tokens
+  </Card>
+  <Card title="Broadcasts API" icon="tower-broadcast" href="/api/broadcasts">
+    Manage live streams and recordings
+  </Card>
+  <Card title="VoD API" icon="video" href="/api/vod">
+    Handle video-on-demand content
+  </Card>
+  <Card title="Push Notifications" icon="bell" href="/api/push-notifications">
+    Send notifications to subscribers
+  </Card>
+</CardGroup>

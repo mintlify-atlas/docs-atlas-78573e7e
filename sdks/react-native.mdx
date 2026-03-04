@@ -1,0 +1,489 @@
+---
+title: "React Native SDK"
+description: "Cross-platform WebRTC SDK for React Native applications on iOS and Android"
+---
+
+The Ant Media Server React Native SDK enables ultra-low latency WebRTC streaming in React Native applications. Write once, deploy to both iOS and Android.
+
+## Installation
+
+### NPM
+
+Install the SDK via npm:
+
+```bash
+npm install @ant-media/react-native-ant-media
+```
+
+### Yarn
+
+Or install with yarn:
+
+```bash
+yarn add @ant-media/react-native-ant-media
+```
+
+### iOS Setup
+
+Install CocoaPods dependencies:
+
+```bash
+cd ios
+pod install
+cd ..
+```
+
+Add permissions to `ios/YourApp/Info.plist`:
+
+```xml
+<key>NSCameraUsageDescription</key>
+<string>Camera access is required for video streaming</string>
+
+<key>NSMicrophoneUsageDescription</key>
+<string>Microphone access is required for audio streaming</string>
+```
+
+### Android Setup
+
+Add permissions to `android/app/src/main/AndroidManifest.xml`:
+
+```xml
+<uses-permission android:name="android.permission.CAMERA" />
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+<uses-feature android:name="android.hardware.camera" />
+<uses-feature android:name="android.hardware.camera.autofocus" />
+```
+
+## Basic Usage
+
+### Import Components
+
+```javascript
+import {
+  RTCView,
+  useAntMedia,
+  AntMediaProvider
+} from '@ant-media/react-native-ant-media';
+```
+
+### Setup Provider
+
+Wrap your app with AntMediaProvider:
+
+```javascript
+import React from 'react';
+import { AntMediaProvider } from '@ant-media/react-native-ant-media';
+import App from './App';
+
+const Root = () => {
+  return (
+    <AntMediaProvider>
+      <App />
+    </AntMediaProvider>
+  );
+};
+
+export default Root;
+```
+
+### Publishing a Stream
+
+<CodeGroup>
+
+```javascript Functional Component
+import React, { useEffect } from 'react';
+import { View, Button, StyleSheet } from 'react-native';
+import { RTCView, useAntMedia } from '@ant-media/react-native-ant-media';
+
+const PublishScreen = () => {
+  const {
+    localMedia,
+    remoteMedia,
+    publish,
+    stop,
+    isConnected
+  } = useAntMedia();
+
+  const serverUrl = 'wss://your-server:5443/WebRTCAppEE/websocket';
+  const streamId = 'myStream123';
+
+  const handlePublish = async () => {
+    try {
+      await publish({
+        serverUrl,
+        streamId,
+        mode: 'publish'
+      });
+    } catch (error) {
+      console.error('Publish error:', error);
+    }
+  };
+
+  const handleStop = () => {
+    stop();
+  };
+
+  return (
+    <View style={styles.container}>
+      {localMedia && (
+        <RTCView
+          streamURL={localMedia.toURL()}
+          style={styles.video}
+          objectFit="cover"
+        />
+      )}
+      
+      <Button
+        title={isConnected ? "Stop" : "Start Publishing"}
+        onPress={isConnected ? handleStop : handlePublish}
+      />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  video: {
+    width: '100%',
+    height: '100%'
+  }
+});
+
+export default PublishScreen;
+```
+
+```javascript With Token
+const handlePublish = async () => {
+  try {
+    await publish({
+      serverUrl: 'wss://your-server:5443/WebRTCAppEE/websocket',
+      streamId: 'myStream123',
+      mode: 'publish',
+      token: 'your-publish-token'
+    });
+  } catch (error) {
+    console.error('Publish error:', error);
+  }
+};
+```
+
+</CodeGroup>
+
+### Playing a Stream
+
+```javascript
+import React from 'react';
+import { View, Button, StyleSheet } from 'react-native';
+import { RTCView, useAntMedia } from '@ant-media/react-native-ant-media';
+
+const PlayScreen = () => {
+  const {
+    remoteMedia,
+    play,
+    stop,
+    isConnected
+  } = useAntMedia();
+
+  const handlePlay = async () => {
+    try {
+      await play({
+        serverUrl: 'wss://your-server:5443/WebRTCAppEE/websocket',
+        streamId: 'myStream123',
+        mode: 'play'
+      });
+    } catch (error) {
+      console.error('Play error:', error);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      {remoteMedia && (
+        <RTCView
+          streamURL={remoteMedia.toURL()}
+          style={styles.video}
+          objectFit="cover"
+        />
+      )}
+      
+      <Button
+        title={isConnected ? "Stop" : "Start Playing"}
+        onPress={isConnected ? stop : handlePlay}
+      />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1
+  },
+  video: {
+    width: '100%',
+    height: '100%'
+  }
+});
+
+export default PlayScreen;
+```
+
+## Conference Room
+
+Join a multi-party conference room:
+
+```javascript
+import React, { useState } from 'react';
+import { View, Button, ScrollView } from 'react-native';
+import { RTCView, useAntMedia } from '@ant-media/react-native-ant-media';
+
+const ConferenceScreen = () => {
+  const {
+    localMedia,
+    remoteStreams,
+    joinRoom,
+    leaveRoom,
+    isConnected
+  } = useAntMedia();
+
+  const handleJoinRoom = async () => {
+    try {
+      await joinRoom({
+        serverUrl: 'wss://your-server:5443/WebRTCAppEE/websocket',
+        roomId: 'conference-room-1',
+        streamId: 'myStreamInRoom'
+      });
+    } catch (error) {
+      console.error('Join room error:', error);
+    }
+  };
+
+  return (
+    <View style={{ flex: 1 }}>
+      {localMedia && (
+        <RTCView
+          streamURL={localMedia.toURL()}
+          style={{ width: 200, height: 200 }}
+        />
+      )}
+      
+      <ScrollView>
+        {remoteStreams.map((stream) => (
+          <RTCView
+            key={stream.id}
+            streamURL={stream.toURL()}
+            style={{ width: 200, height: 200 }}
+          />
+        ))}
+      </ScrollView>
+      
+      <Button
+        title={isConnected ? "Leave Room" : "Join Room"}
+        onPress={isConnected ? leaveRoom : handleJoinRoom}
+      />
+    </View>
+  );
+};
+
+export default ConferenceScreen;
+```
+
+## Camera Controls
+
+Control camera and media settings:
+
+```javascript
+const CameraControls = () => {
+  const {
+    switchCamera,
+    toggleAudio,
+    toggleVideo,
+    isMuted,
+    isVideoEnabled
+  } = useAntMedia();
+
+  return (
+    <View>
+      <Button title="Switch Camera" onPress={switchCamera} />
+      <Button 
+        title={isMuted ? "Unmute" : "Mute"} 
+        onPress={toggleAudio} 
+      />
+      <Button 
+        title={isVideoEnabled ? "Disable Video" : "Enable Video"} 
+        onPress={toggleVideo} 
+      />
+    </View>
+  );
+};
+```
+
+## Data Channels
+
+Send and receive real-time data:
+
+```javascript
+const DataChannelExample = () => {
+  const { sendData, onDataReceived } = useAntMedia();
+
+  useEffect(() => {
+    onDataReceived((data) => {
+      console.log('Received data:', data);
+    });
+  }, []);
+
+  const handleSendData = () => {
+    const message = {
+      text: 'Hello viewers!',
+      timestamp: Date.now()
+    };
+    sendData(JSON.stringify(message));
+  };
+
+  return (
+    <Button title="Send Data" onPress={handleSendData} />
+  );
+};
+```
+
+## Event Listeners
+
+Listen to SDK events:
+
+```javascript
+import { useEffect } from 'react';
+import { useAntMedia } from '@ant-media/react-native-ant-media';
+
+const EventListeners = () => {
+  const { addEventListener, removeEventListener } = useAntMedia();
+
+  useEffect(() => {
+    const handlePublishStarted = (event) => {
+      console.log('Publishing started:', event.streamId);
+    };
+
+    const handlePublishFinished = (event) => {
+      console.log('Publishing finished:', event.streamId);
+    };
+
+    const handleError = (error) => {
+      console.error('Error:', error);
+    };
+
+    addEventListener('publishStarted', handlePublishStarted);
+    addEventListener('publishFinished', handlePublishFinished);
+    addEventListener('error', handleError);
+
+    return () => {
+      removeEventListener('publishStarted', handlePublishStarted);
+      removeEventListener('publishFinished', handlePublishFinished);
+      removeEventListener('error', handleError);
+    };
+  }, []);
+
+  return null;
+};
+```
+
+## Configuration Options
+
+### Media Constraints
+
+Customize video and audio settings:
+
+```javascript
+await publish({
+  serverUrl: 'wss://your-server:5443/WebRTCAppEE/websocket',
+  streamId: 'myStream123',
+  mode: 'publish',
+  mediaConstraints: {
+    video: {
+      width: 1280,
+      height: 720,
+      frameRate: 30,
+      facingMode: 'user' // or 'environment'
+    },
+    audio: true
+  }
+});
+```
+
+### Video Resolution
+
+Set video resolution:
+
+```javascript
+const { setVideoResolution } = useAntMedia();
+
+setVideoResolution(1280, 720);
+```
+
+## Runtime Permissions
+
+Request camera and microphone permissions:
+
+```javascript
+import { PermissionsAndroid, Platform } from 'react-native';
+
+const requestPermissions = async () => {
+  if (Platform.OS === 'android') {
+    try {
+      const granted = await PermissionsAndroid.requestMultiple([
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+      ]);
+      
+      if (
+        granted['android.permission.CAMERA'] === PermissionsAndroid.RESULTS.GRANTED &&
+        granted['android.permission.RECORD_AUDIO'] === PermissionsAndroid.RESULTS.GRANTED
+      ) {
+        console.log('Permissions granted');
+        return true;
+      } else {
+        console.log('Permissions denied');
+        return false;
+      }
+    } catch (err) {
+      console.warn(err);
+      return false;
+    }
+  }
+  return true; // iOS permissions handled via Info.plist
+};
+```
+
+## Resources
+
+<Card title="React Native SDK Repository" icon="github" href="https://github.com/ant-media/WebRTC-React-Native-SDK">
+  View source code, sample apps, and contribute on GitHub
+</Card>
+
+## Requirements
+
+- React Native 0.60 or higher
+- iOS 12.0 or later
+- Android 5.0 (API level 21) or higher
+- Ant Media Server with SSL/TLS configured
+
+<Note>
+  Make sure to test on both iOS and Android devices as WebRTC behavior may differ between platforms.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Flutter SDK" icon="mobile" href="/sdks/flutter">
+    Build with Flutter for cross-platform apps
+  </Card>
+  
+  <Card title="Authentication" icon="shield-halved" href="/security/authentication">
+    Secure streams with token authentication
+  </Card>
+</CardGroup>

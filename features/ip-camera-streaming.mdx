@@ -1,0 +1,528 @@
+---
+title: IP Camera Streaming
+description: Stream from IP cameras and ONVIF-compliant devices with PTZ control support
+---
+
+## Overview
+
+Ant Media Server can pull streams from IP cameras and re-stream them to viewers. This feature supports:
+
+- **RTSP Camera Sources** - Pull streams from any RTSP-enabled camera
+- **ONVIF Protocol** - Auto-discover and configure ONVIF cameras  
+- **PTZ Control** - Pan, tilt, and zoom control for compatible cameras
+- **Multiple Cameras** - Manage hundreds of camera streams
+- **Recording & Transcoding** - Record camera feeds and create adaptive streams
+
+<Frame>
+  <img src="/images/ip-camera-flow.png" alt="IP camera streaming workflow" />
+</Frame>
+
+## Supported Protocols
+
+### RTSP (Real-Time Streaming Protocol)
+
+Most common protocol for IP cameras:
+
+- **RTSP/TCP** - Reliable, works through firewalls
+- **RTSP/UDP** - Lower latency, may have packet loss
+- **RTSP/HTTP** - Tunnels through port 80/443
+
+Example RTSP URLs:
+```
+rtsp://admin:password@192.168.1.100:554/cam/realmonitor?channel=1&subtype=0
+rtsp://192.168.1.101/stream1
+rtsp://camera.example.com:8554/live.sdp
+```
+
+### ONVIF (Open Network Video Interface Forum)
+
+Standardized protocol for IP cameras:
+
+- Auto-discovery of cameras on network
+- Retrieve camera capabilities
+- Get RTSP stream URLs automatically
+- Control PTZ (Pan-Tilt-Zoom)
+- Configure camera settings
+
+## ONVIF Integration
+
+Ant Media Server includes a full ONVIF client implementation:
+
+<CodeGroup>
+```java OnvifCamera.java
+public class OnvifCamera implements IOnvifCamera {
+    public static final int CONNECTION_SUCCESS = 0;
+    public static final int CONNECT_ERROR = -1;
+    public static final int AUTHENTICATION_ERROR = -2;
+    
+    private OnvifDevice nvt;
+    private PtzDevices ptzDevices;
+    private List<Profile> profiles;
+    private String profileToken;
+    
+    @Override
+    public int connect(String address, String username, String password) {
+        // Extract IP from address (may include http:// or https://)
+        String camIP = getIPAddress(address);
+        String protocol = getProtocol(address);
+        
+        nvt = new OnvifDevice(camIP, protocol, username, password);
+        nvt.getSoap().setLogging(false);
+        
+        // Get device capabilities
+        nvt.getDevices().getCapabilities().getDevice();
+        nvt.getDevices().getServices(false);
+        
+        // Initialize PTZ if available
+        ptzDevices = nvt.getPtz();
+        profiles = nvt.getDevices().getProfiles();
+        
+        // Find profile with PTZ support
+        for (Profile profile : profiles) {
+            if (profile.getPTZConfiguration() != null) {
+                profileToken = profile.getToken();
+                break;
+            }
+        }
+        
+        return CONNECTION_SUCCESS;
+    }
+    
+    @Override
+    public String getRTSPStreamURI() {
+        return nvt.getMedia().getRTSPStreamUri(profileToken);
+    }
+}
+```
+</CodeGroup>
+
+### Connection Methods
+
+The ONVIF client supports both HTTP and HTTPS:
+
+```java
+public String getProtocol(String address) {
+    if (address.startsWith("http://")) {
+        return "http";
+    } else if (address.startsWith("https://")) {
+        return "https";  
+    }
+    return null;
+}
+```
+
+## Adding IP Cameras
+
+### Via Web Panel
+
+<Steps>
+  <Step title="Navigate to Streams">
+    Go to **LiveApp → Streams** in the web dashboard
+  </Step>
+  
+  <Step title="Add IP Camera">
+    Click **New Live Stream → IP Camera**
+  </Step>
+  
+  <Step title="Enter Camera Details">
+    - **Name:** Friendly name for the camera
+    - **RTSP URL:** Full RTSP URL with credentials
+    - **ONVIF Address:** (Optional) ONVIF device address
+    - **Username:** Camera admin username  
+    - **Password:** Camera admin password
+  </Step>
+  
+  <Step title="Configure Options">
+    - Enable recording if needed
+    - Set up transcoding profiles
+    - Configure preview generation
+  </Step>
+  
+  <Step title="Start Streaming">
+    Click **Create** - the stream will start automatically
+  </Step>
+</Steps>
+
+### Via REST API
+
+Add a camera programmatically:
+
+<CodeGroup>
+```bash cURL - RTSP Direct
+curl -X POST "http://localhost:5080/LiveApp/rest/v2/broadcasts/create" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Front Door Camera",
+    "type": "ipCamera",
+    "ipAddr": "rtsp://admin:pass123@192.168.1.100:554/stream1",
+    "streamId": "camera-front-door"
+  }'
+```
+
+```bash cURL - ONVIF Discovery  
+curl -X POST "http://localhost:5080/LiveApp/rest/v2/broadcasts/create" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "PTZ Camera",
+    "type": "ipCamera",
+    "onvifProfileId": "Profile_1",
+    "ipAddr": "http://192.168.1.101",
+    "username": "admin",
+    "password": "camera123",
+    "streamId": "camera-ptz"
+  }'
+```
+
+```javascript JavaScript
+const camera = {
+  name: 'Parking Lot Camera',
+  type: 'ipCamera',
+  ipAddr: 'rtsp://camera.example.com:554/live',
+  username: 'admin',
+  password: 'securepass',
+  streamId: 'camera-parking'
+};
+
+const response = await fetch('http://localhost:5080/LiveApp/rest/v2/broadcasts/create', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(camera)
+});
+
+const result = await response.json();
+console.log('Camera added:', result.streamId);
+```
+</CodeGroup>
+
+## PTZ Control
+
+Control pan, tilt, and zoom on ONVIF cameras:
+
+### PTZ Movement Types
+
+<Tabs>
+  <Tab title="Continuous">
+    Move continuously until stop command:
+    
+    ```java
+    public boolean moveContinuous(float x, float y, float zoom) {
+        return ptzDevices.continuousMove(profileToken, x, y, zoom);
+    }
+    ```
+    
+    Parameters:
+    - `x`: Pan speed (-1.0 to 1.0)
+    - `y`: Tilt speed (-1.0 to 1.0)  
+    - `zoom`: Zoom speed (-1.0 to 1.0)
+  </Tab>
+  
+  <Tab title="Relative">
+    Move relative to current position:
+    
+    ```java
+    public boolean moveRelative(float x, float y, float zoom) {
+        return ptzDevices.relativeMove(profileToken, x, y, zoom);
+    }
+    ```
+    
+    Example: `moveRelative(0.1, 0, 0)` pans right by 10%
+  </Tab>
+  
+  <Tab title="Absolute">
+    Move to absolute position:
+    
+    ```java
+    public boolean moveAbsolute(float x, float y, float zoom) {
+        return ptzDevices.absoluteMove(profileToken, x, y, zoom);
+    }
+    ```
+    
+    Coordinates range from -1.0 to 1.0 for pan/tilt
+  </Tab>
+</Tabs>
+
+### REST API for PTZ
+
+<CodeGroup>
+```bash Move Camera
+# Continuous move (pan right)
+curl -X POST "http://localhost:5080/LiveApp/rest/v2/broadcasts/{streamId}/ptz/move" \
+  -H "Content-Type: application/json" \
+  -d '{"x": 0.5, "y": 0, "zoom": 0}'
+
+# Stop movement  
+curl -X POST "http://localhost:5080/LiveApp/rest/v2/broadcasts/{streamId}/ptz/stop"
+```
+
+```bash Absolute Position
+# Move to home position (center)
+curl -X POST "http://localhost:5080/LiveApp/rest/v2/broadcasts/{streamId}/ptz/absolute" \
+  -H "Content-Type: application/json" \
+  -d '{"x": 0, "y": 0, "zoom": 0}'
+```
+</CodeGroup>
+
+### Stop Movement
+
+```java
+public boolean moveStop() {
+    return ptzDevices.stopMove(profileToken);
+}
+```
+
+## Camera Settings
+
+### Image Settings
+
+Adjust brightness, contrast, etc.:
+
+```java
+public boolean setBrightness(float brightness) {
+    ImagingSettings20 imageSettings = nvt.getImaging()
+                                        .getImagingSettings(profileToken);
+    imageSettings.setBrightness(brightness);
+    return nvt.getImaging().setImagingSettings(profileToken, imageSettings);
+}
+```
+
+Available settings:
+- **Brightness** - 0.0 to 100.0
+- **Contrast** - 0.0 to 100.0  
+- **Saturation** - 0.0 to 100.0
+- **Sharpness** - 0.0 to 100.0
+- **Focus Mode** - Auto / Manual
+
+### Get Camera Time
+
+```java
+public java.util.Date getTime() {
+    return nvt.getDate();
+}
+```
+
+## Streaming Configuration
+
+### Stream Pull Settings
+
+Configure how AMS pulls from cameras:
+
+```json
+{
+  "ipCameraPullPeriod": 10000,
+  "ipCameraRestartPeriod": 30000,  
+  "ipCameraAutoStart": true
+}
+```
+
+| Setting | Description | Default |
+|---------|-------------|----------|
+| `ipCameraPullPeriod` | How often to check camera availability (ms) | 10000 |
+| `ipCameraRestartPeriod` | Wait time before reconnecting after failure (ms) | 30000 |
+| `ipCameraAutoStart` | Auto-start camera streams on server startup | true |
+
+### Transport Protocol
+
+Choose between TCP and UDP for RTSP:
+
+```json
+{
+  "rtspPullTransportType": "tcp"
+}
+```
+
+Options:
+- `tcp` - More reliable, works through NAT/firewalls
+- `udp` - Lower latency, may drop packets
+- `http` - Tunnel through HTTP (port 80/443)
+
+## Recording Camera Streams
+
+Enable recording for camera streams:
+
+<CodeGroup>
+```bash Enable Recording
+curl -X PUT "http://localhost:5080/LiveApp/rest/v2/broadcasts/{streamId}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mp4Enabled": 1,
+    "hlsEnabled": 1
+  }'
+```
+
+```json Schedule Recording
+{
+  "streamId": "camera-front-door",
+  "mp4Enabled": 1,
+  "scheduledStartTime": 1709600000000,
+  "scheduledEndTime": 1709686400000
+}
+```
+</CodeGroup>
+
+<Tip>
+Use scheduled recording to save storage by only recording during specific hours (e.g., business hours).
+</Tip>
+
+## Multi-Camera Management
+
+### Bulk Operations
+
+Manage multiple cameras efficiently:
+
+<CodeGroup>
+```bash Start All Cameras  
+curl -X POST "http://localhost:5080/LiveApp/rest/v2/broadcasts/bulk/start" \
+  -H "Content-Type: application/json" \
+  -d '{"streamIds": ["camera-1", "camera-2", "camera-3"]}'
+```
+
+```bash Stop All Cameras
+curl -X POST "http://localhost:5080/LiveApp/rest/v2/broadcasts/bulk/stop" \
+  -H "Content-Type: application/json" \
+  -d '{"streamIds": ["camera-1", "camera-2", "camera-3"]}'
+```
+</CodeGroup>
+
+### Camera Groups
+
+Organize cameras by location or purpose:
+
+```json
+{
+  "name": "Building A Cameras",
+  "streamIds": [
+    "camera-entrance",
+    "camera-lobby",  
+    "camera-parking"
+  ]
+}
+```
+
+## Playback Options
+
+### HLS Streaming
+
+Camera feeds available as HLS:
+
+```html
+<video id="camera" controls>
+  <source src="http://localhost:5080/LiveApp/streams/camera-front-door.m3u8" type="application/x-mpegURL">
+</video>
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script>
+  const video = document.getElementById('camera');
+  const hls = new Hls();
+  hls.loadSource('http://localhost:5080/LiveApp/streams/camera-front-door.m3u8');
+  hls.attachMedia(video);
+</script>
+```
+
+### WebRTC Playback
+
+Ultra-low latency viewing:
+
+```javascript
+const webRTCAdaptor = new WebRTCAdaptor({
+  websocket_url: 'ws://localhost:5080/LiveApp/websocket',
+  streamId: 'camera-front-door',
+  callback: (info, obj) => {
+    if (info === 'play_started') {
+      console.log('Camera stream started');
+    }
+  }
+});
+
+webRTCAdaptor.play('camera-front-door');
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Cannot connect to camera">
+    **Common causes:**
+    - Wrong IP address or port
+    - Incorrect username/password
+    - Camera not on same network
+    - Firewall blocking RTSP (port 554)
+    
+    **Debugging:**
+    ```bash
+    # Test RTSP connection
+    ffplay rtsp://admin:password@192.168.1.100:554/stream1
+    
+    # Check network connectivity
+    ping 192.168.1.100
+    telnet 192.168.1.100 554
+    ```
+  </Accordion>
+  
+  <Accordion title="Stream keeps disconnecting">
+    **Possible issues:**
+    - Network instability  
+    - Camera firmware issues
+    - Resource limits on AMS server
+    - TCP/UDP protocol mismatch
+    
+    **Solutions:**
+    - Increase `ipCameraRestartPeriod`
+    - Switch between TCP/UDP transport
+    - Check camera logs for errors
+    - Monitor server resources (CPU/memory)
+  </Accordion>
+  
+  <Accordion title="ONVIF discovery not working">
+    **Reasons:**
+    - Camera doesn't support ONVIF
+    - ONVIF disabled in camera settings  
+    - Different subnet
+    - Authentication required
+    
+    **Fix:**
+    - Verify ONVIF support in camera specs
+    - Enable ONVIF in camera web interface
+    - Use direct RTSP URL instead
+    - Provide username/password in connection
+  </Accordion>
+  
+  <Accordion title="PTZ controls don't work">
+    **Check:**
+    - Camera supports PTZ
+    - ONVIF connection established
+    - Correct profile selected
+    - PTZ not locked by another client
+    
+    **Test:**
+    ```bash
+    # Verify PTZ capability
+    curl "http://localhost:5080/LiveApp/rest/v2/broadcasts/{streamId}/onvif/capabilities"
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Substreams" icon="video">
+    Configure cameras to provide multiple streams. Use main stream for recording, substream for live viewing to reduce bandwidth.
+  </Card>
+  
+  <Card title="Secure Credentials" icon="lock">
+    Never hardcode camera passwords. Use environment variables or secure credential storage.
+  </Card>
+  
+  <Card title="Monitor Health" icon="heartbeat">
+    Set up alerts for camera disconnections. Use webhooks to get notified when streams fail.
+  </Card>
+  
+  <Card title="Optimize Storage" icon="hard-drive">
+    Use scheduled recording and configure retention policies to manage storage for camera recordings.
+  </Card>
+</CardGroup>
+
+## Related Resources
+
+- [Recording Configuration](/features/recording)
+- [HLS Streaming](/streaming/hls)
+- [Webhooks](/features/webhooks)
+- [REST API Reference](/api/broadcasts)

@@ -1,0 +1,313 @@
+---
+title: Stream Recording
+description: Record live streams to MP4 and WebM formats with automatic cloud storage integration
+---
+
+## Overview
+
+Ant Media Server provides powerful recording capabilities that allow you to capture live streams in MP4 and WebM formats. The recording system is built on FFmpeg and supports automatic upload to cloud storage services like AWS S3, Azure Storage, and Google Cloud Storage.
+
+## Recording Formats
+
+Ant Media Server supports two recording formats:
+
+- **MP4** - H.264/H.265 video with AAC audio
+- **WebM** - VP8/VP9 video with Vorbis audio
+
+### Supported Codecs for MP4
+
+The MP4 muxer supports a wide range of codecs:
+
+<CodeGroup>
+```java Source Reference
+// From Mp4Muxer.java:87-121
+private static int[] MP4_SUPPORTED_CODECS = {
+    AV_CODEC_ID_MOV_TEXT,
+    AV_CODEC_ID_MPEG4,
+    AV_CODEC_ID_H264,
+    AV_CODEC_ID_HEVC,
+    AV_CODEC_ID_AAC,
+    AV_CODEC_ID_MPEG2VIDEO,
+    AV_CODEC_ID_MP3,
+    AV_CODEC_ID_VP9,
+    AV_CODEC_ID_AC3,
+    AV_CODEC_ID_EAC3,
+    // ... and more
+};
+```
+</CodeGroup>
+
+## Configuration
+
+### Enable Recording
+
+Recording can be enabled at different levels:
+
+<Steps>
+  <Step title="Application Level">
+    Enable recording for all streams in your application via the Web Panel:
+    
+    **Settings → Advanced Settings → MP4 Muxing**
+    
+    Set `mp4MuxingEnabled` to `true`
+  </Step>
+  
+  <Step title="Stream Level">
+    Enable recording for specific streams using the REST API:
+    
+    ```bash
+    curl -X PUT "http://localhost:5080/LiveApp/rest/v2/broadcasts/{streamId}" \
+      -H "Content-Type: application/json" \
+      -d '{"mp4Enabled": 1}'
+    ```
+  </Step>
+</Steps>
+
+### Recording Settings
+
+Key application settings for recording:
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `mp4MuxingEnabled` | boolean | true | Enable/disable MP4 recording |
+| `webMMuxingEnabled` | boolean | false | Enable/disable WebM recording |
+| `addDateTimeToMp4FileName` | boolean | false | Add timestamp to recording filename |
+| `recordingSubfolder` | string | "" | Subfolder for storing recordings |
+| `uploadExtensionsToS3` | int | 7 | Bitmask for file types to upload to S3 |
+
+## Cloud Storage Integration
+
+Recordings can be automatically uploaded to cloud storage after the stream ends.
+
+### AWS S3 Configuration
+
+Configure S3 storage in Web Panel:
+
+<CodeGroup>
+```json Settings
+{
+  "s3RecordingEnabled": true,
+  "s3AccessKey": "YOUR_ACCESS_KEY",
+  "s3SecretKey": "YOUR_SECRET_KEY",
+  "s3RegionName": "us-east-1",
+  "s3BucketName": "my-recordings",
+  "s3FolderPath": "streams"
+}
+```
+</CodeGroup>
+
+### Upload Behavior
+
+The `RecordMuxer` class handles the upload process:
+
+<CodeGroup>
+```java RecordMuxer.java:146-177
+@Override
+public synchronized void writeTrailer() {
+    super.writeTrailer();
+    
+    vertx.executeBlocking(() -> {
+        AppSettings appSettings = getAppSettings();
+        File f = getFinalFileName(appSettings.isS3RecordingEnabled());
+        
+        finalizeRecordFile(f);
+        
+        // Notify application about completed recording
+        adaptor.muxingFinished(broadcast, streamId, f, startTime, 
+                              getDurationInMs(f, streamId), resolution, 
+                              previewPath, vodId);
+        
+        // Upload to S3 if enabled
+        if (appSettings.isS3RecordingEnabled() && this.uploadMP4ToS3) {
+            logger.info("Saving {} to storage", f.getName());
+            saveToStorage(getS3Prefix(s3FolderPath, subFolder), 
+                         f, f.getName(), storageClient);
+        }
+        return null;
+    }, false);
+}
+```
+</CodeGroup>
+
+<Note>
+The recording file is renamed from `.mp4.tmp` to `.mp4` only after the stream successfully ends. This prevents incomplete files from being processed.
+</Note>
+
+## Recording Lifecycle
+
+<Steps>
+  <Step title="Stream Start">
+    When a stream starts, the `RecordMuxer` is initialized:
+    - Temporary file created with `.tmp` extension
+    - Video and audio streams configured
+    - Recording starts after first keyframe received
+  </Step>
+  
+  <Step title="Active Recording">
+    During the stream:
+    - Video and audio packets written to file
+    - Codec parameters validated
+    - File integrity maintained
+  </Step>
+  
+  <Step title="Stream End">
+    When the stream ends:
+    - Trailer written to finalize the file
+    - File renamed (remove `.tmp` extension)
+    - VoD entry created in database
+    - File uploaded to cloud storage (if enabled)
+    - Local file deleted (if configured)
+  </Step>
+</Steps>
+
+## Advanced Features
+
+### Date/Time in Filenames
+
+Add timestamp to recording filenames:
+
+```json
+{
+  "addDateTimeToMp4FileName": true
+}
+```
+
+Result: `streamId_2026-03-04_14-30-15.mp4`
+
+### Recording Subfolders
+
+Organize recordings in subfolders:
+
+<CodeGroup>
+```java RecordMuxer.java:244-256
+public void setSubfolder(String subFolder) {
+    this.subFolder = subFolder;
+    
+    String recordingSubfolder = getAppSettings().getRecordingSubfolder();
+    if (!StringUtils.isBlank(recordingSubfolder)) {
+        if (!StringUtils.isBlank(this.subFolder)) {
+            this.subFolder = subFolder + File.separator + recordingSubfolder;
+        } else {
+            this.subFolder = recordingSubfolder;
+        }
+    }
+}
+```
+</CodeGroup>
+
+### VoD Integration
+
+Recordings are automatically registered as Video-on-Demand (VoD) items:
+
+```bash
+# List recordings via REST API
+curl "http://localhost:5080/LiveApp/rest/v2/vods/list/0/10"
+```
+
+Response includes:
+- VoD ID
+- Stream ID
+- File path
+- Duration
+- Creation date
+- File size
+
+## Code Examples
+
+### Enable Recording via REST API
+
+<CodeGroup>
+```bash cURL
+curl -X POST "http://localhost:5080/LiveApp/rest/v2/broadcasts/create" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "My Stream",
+    "streamId": "stream123",
+    "mp4Enabled": 1,
+    "webMEnabled": 0
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('http://localhost:5080/LiveApp/rest/v2/broadcasts/create', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    name: 'My Stream',
+    streamId: 'stream123',
+    mp4Enabled: 1,
+    webMEnabled: 0
+  })
+});
+
+const result = await response.json();
+console.log('Recording enabled:', result.success);
+```
+</CodeGroup>
+
+### Check Recording Status
+
+```bash
+curl "http://localhost:5080/LiveApp/rest/v2/broadcasts/{streamId}"
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Recording file not created">
+    **Possible causes:**
+    - Recording not enabled in settings
+    - Stream ended before first keyframe
+    - Insufficient disk space
+    - Codec not supported
+    
+    **Solution:** Check logs for codec compatibility and enable DEBUG logging for `io.antmedia.muxer.RecordMuxer`
+  </Accordion>
+  
+  <Accordion title="S3 upload fails">
+    **Possible causes:**
+    - Invalid S3 credentials
+    - Incorrect bucket name or region
+    - Network connectivity issues
+    - IAM permissions insufficient
+    
+    **Solution:** Verify S3 settings and check that the IAM user has `s3:PutObject` permission
+  </Accordion>
+  
+  <Accordion title="Incomplete recordings">
+    **Issue:** Recording ends with `.tmp` extension
+    
+    **Cause:** Stream did not end gracefully (crash or network disconnect)
+    
+    **Solution:** You can manually remux the file using FFmpeg:
+    ```bash
+    ffmpeg -i input.mp4.tmp -c copy output.mp4
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Monitor Disk Space" icon="hard-drive">
+    Ensure sufficient disk space for recordings. Use the `recordingSubfolder` setting to organize files.
+  </Card>
+  
+  <Card title="Use Cloud Storage" icon="cloud">
+    Enable S3 upload to prevent local disk from filling up. Configure automatic local file deletion.
+  </Card>
+  
+  <Card title="Validate Codecs" icon="check">
+    Verify incoming streams use supported codecs (H.264/H.265 for video, AAC for audio).
+  </Card>
+  
+  <Card title="Test Recovery" icon="rotate">
+    Test your recording system with unexpected stream disconnects to ensure proper file handling.
+  </Card>
+</CardGroup>
+
+## Related Resources
+
+- [VoD Management](/api/vod)
+- [Cloud Storage Configuration](/deployment/cloud-storage)
+- [REST API Reference](/api/broadcasts)

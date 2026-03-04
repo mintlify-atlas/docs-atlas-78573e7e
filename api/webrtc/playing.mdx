@@ -1,0 +1,476 @@
+---
+title: "Playing WebRTC Streams"
+description: "Learn how to play WebRTC streams from Ant Media Server with JavaScript SDK"
+---
+
+## Overview
+
+Playing WebRTC streams allows you to receive live video and audio from Ant Media Server with ultra-low latency. The player automatically handles adaptive bitrate streaming, network fluctuations, and quality adjustments.
+
+## Quick Start
+
+### Basic Player Example
+
+```javascript
+// Initialize WebRTC Adaptor for playback
+var webRTCAdaptor = new WebRTCAdaptor({
+    websocket_url: "wss://your-server.com:5443/WebRTCAppEE/websocket",
+    mediaConstraints: {
+        video: false,
+        audio: false
+    },
+    peerconnection_config: {
+        iceServers: [{urls: "stun:stun1.l.google.com:19302"}]
+    },
+    sdp_constraints: {
+        OfferToReceiveAudio: true,
+        OfferToReceiveVideo: true
+    },
+    remoteVideoId: "remoteVideo",
+    isPlayMode: true,
+    callback: function(info, obj) {
+        if (info == "initialized") {
+            console.log("WebRTC Adaptor initialized");
+        }
+        else if (info == "play_started") {
+            console.log("Playing stream: " + obj.streamId);
+        }
+        else if (info == "play_finished") {
+            console.log("Playback finished");
+        }
+    },
+    callbackError: function(error, message) {
+        console.log("Error: " + error + " Message: " + message);
+    }
+});
+
+// Start playing
+var streamId = "stream123";
+webRTCAdaptor.play(streamId);
+```
+
+### HTML Setup
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebRTC Player</title>
+</head>
+<body>
+    <video id="remoteVideo" autoplay controls playsinline></video>
+    
+    <script src="https://your-server.com:5443/WebRTCAppEE/js/webrtc_adaptor.js"></script>
+    <script>
+        // Initialize player (see code above)
+    </script>
+</body>
+</html>
+```
+
+## Configuration Options
+
+### SDP Constraints for Playback
+
+```javascript
+sdp_constraints: {
+    OfferToReceiveAudio: true,  // Receive audio track
+    OfferToReceiveVideo: true   // Receive video track
+}
+```
+
+### Audio-Only Playback
+
+```javascript
+sdp_constraints: {
+    OfferToReceiveAudio: true,
+    OfferToReceiveVideo: false
+}
+```
+
+### Video-Only Playback
+
+```javascript
+sdp_constraints: {
+    OfferToReceiveAudio: false,
+    OfferToReceiveVideo: true
+}
+```
+
+### Player Mode Flag
+
+```javascript
+isPlayMode: true  // Set to true for playback, false for publishing
+```
+
+## Callbacks
+
+### Playback Callback Events
+
+```javascript
+callback: function(info, obj) {
+    switch(info) {
+        case "initialized":
+            // WebRTC Adaptor ready for playback
+            console.log("Player initialized");
+            break;
+            
+        case "play_started":
+            // Playback successfully started
+            console.log("Stream ID: " + obj.streamId);
+            break;
+            
+        case "play_finished":
+            // Playback stopped or stream ended
+            console.log("Playback finished");
+            break;
+            
+        case "newStreamAvailable":
+            // New stream track available
+            console.log("New track: " + obj.track.id);
+            break;
+            
+        case "ice_connection_state_changed":
+            // ICE connection state updated
+            console.log("ICE state: " + obj.state);
+            break;
+            
+        case "updated_stats":
+            // Updated playback statistics
+            console.log("Bitrate: " + obj.videoBitrate);
+            console.log("Packet Lost: " + obj.videoPacketsLost);
+            console.log("RTT: " + obj.currentRoundTripTime);
+            break;
+            
+        case "data_received":
+            // Data channel message received
+            console.log("Data: " + obj.data);
+            break;
+    }
+}
+```
+
+### Error Handling
+
+```javascript
+callbackError: function(error, message) {
+    switch(error) {
+        case "no_stream_exist":
+            console.log("Stream does not exist: " + message);
+            // Retry or show message to user
+            break;
+            
+        case "notSetRemoteDescription":
+            console.log("Failed to set remote description");
+            break;
+            
+        case "WebSocketNotConnected":
+            console.log("WebSocket not connected");
+            // Attempt reconnection
+            break;
+            
+        case "playTimeoutError":
+            console.log("Play timeout - stream may not be available");
+            break;
+            
+        case "ice_connection_state_failed":
+            console.log("ICE connection failed");
+            // Stop and restart playback
+            break;
+    }
+}
+```
+
+## Adaptive Bitrate Playback
+
+### Automatic Quality Selection
+
+The server automatically selects the best quality based on network conditions:
+
+```javascript
+// Enable adaptive bitrate (enabled by default)
+var webRTCAdaptor = new WebRTCAdaptor({
+    // ... other config
+    callback: function(info, obj) {
+        if (info == "updated_stats") {
+            console.log("Current bitrate: " + obj.videoBitrate);
+            console.log("Resolution: " + obj.resolutionHeight + "p");
+        }
+    }
+});
+```
+
+### Force Specific Quality
+
+Override automatic selection to force a specific resolution:
+
+```javascript
+// Force 720p quality
+var streamId = "stream123";
+var resolutionHeight = 720; // 360, 480, 720, 1080, etc.
+
+webRTCAdaptor.forceStreamQuality(streamId, resolutionHeight);
+```
+
+### Get Available Resolutions
+
+```javascript
+// Get available ABR resolutions for a stream
+webRTCAdaptor.getStreamInfo(streamId);
+
+// Callback will receive stream info
+callback: function(info, obj) {
+    if (info == "streamInformation") {
+        console.log("Available resolutions:");
+        obj.streamInfo.forEach(function(stream) {
+            console.log(stream.streamHeight + "p - " + stream.videoBitrate + " kbps");
+        });
+    }
+}
+```
+
+## Multi-Track Playback
+
+### Playing Multiple Tracks
+
+```javascript
+// Play main stream with additional tracks
+var streamId = "stream123";
+var trackIds = ["track1", "track2"];
+
+webRTCAdaptor.play(streamId, null, null, trackIds);
+
+// Handle new tracks in callback
+callback: function(info, obj) {
+    if (info == "newStreamAvailable") {
+        // Attach track to video element
+        var video = document.getElementById("video-" + obj.trackId);
+        video.srcObject = new MediaStream([obj.track]);
+    }
+}
+```
+
+### Playing with Subtracks
+
+```javascript
+// Play specific subtracks (for conference room scenarios)
+var streamId = "room123";
+var trackIds = ["participant1", "participant2", "participant3"];
+
+webRTCAdaptor.play(streamId, null, null, trackIds);
+```
+
+## Advanced Features
+
+### Playing with Token Authentication
+
+```javascript
+var streamId = "stream123";
+var token = "your-play-token";
+
+webRTCAdaptor.play(streamId, token);
+```
+
+### Playing with Subscriber Information
+
+```javascript
+var streamId = "stream123";
+var token = null;
+var subscriberId = "subscriber123";
+var subscriberCode = "code456";
+var trackIds = [];
+var metaData = {userId: "user123", location: "US"};
+
+webRTCAdaptor.play(streamId, token, subscriberId, subscriberCode, 
+                   trackIds, metaData);
+```
+
+### Enable Data Channel
+
+```javascript
+var webRTCAdaptor = new WebRTCAdaptor({
+    // ... other config
+    dataChannelEnabled: true,
+    callback: function(info, obj) {
+        if (info == "data_received") {
+            console.log("Data received: " + obj.data);
+        }
+    }
+});
+```
+
+## Server-Side API
+
+### IWebRTCClient Interface
+
+The server-side client interface handles media transmission:
+
+```java
+public interface IWebRTCClient {
+    // Send video packet to client
+    void sendVideoPacket(ByteBuffer videoPacket, boolean isKeyFrame, 
+                        long timestamp, int frameRotation, 
+                        List<NaluIndex> naluIndices, String trackId);
+    
+    // Send audio packet to client
+    void sendAudioPacket(ByteBuffer audioPacket, long timestamp, String trackId);
+    
+    // Set remote SDP
+    void setRemoteDescription(SessionDescription sdp);
+    
+    // Add ICE candidate
+    void addIceCandidate(IceCandidate iceCandidate);
+    
+    // Start streaming
+    void start();
+    
+    // Stop streaming
+    void stop();
+    
+    // Get target bitrate
+    int getTargetBitrate();
+    
+    // Force stream quality
+    boolean forceStreamQuality(int streamHeight, String subtrackId);
+}
+```
+
+### Quality Control
+
+The server adapts streaming quality automatically:
+
+```java
+// Adapt streaming quality based on network
+adaptor.adaptStreamingQuality(streamId, webRTCClient, codec);
+
+// Force specific quality
+adaptor.forceStreamingQuality(streamId, webRTCClient, streamHeight);
+
+// Get client statistics
+List<WebRTCClientStats> stats = adaptor.getWebRTCClientStats(streamId);
+for (WebRTCClientStats stat : stats) {
+    int bitrate = stat.getMeasuredBitrate();
+    int packetLoss = stat.getVideoSentStats().getPacketLost();
+    int rtt = stat.getVideoSentStats().getRoundTripTime();
+}
+```
+
+## Player Statistics
+
+### Real-Time Statistics
+
+```javascript
+// Enable statistics callback
+var webRTCAdaptor = new WebRTCAdaptor({
+    // ... other config
+    callback: function(info, obj) {
+        if (info == "updated_stats") {
+            displayStats(obj);
+        }
+    }
+});
+
+function displayStats(stats) {
+    console.log("=== Playback Statistics ===");
+    console.log("Video Bitrate: " + stats.videoBitrate + " kbps");
+    console.log("Audio Bitrate: " + stats.audioBitrate + " kbps");
+    console.log("Packets Lost: " + stats.videoPacketsLost);
+    console.log("Frames Dropped: " + stats.framesDropped);
+    console.log("Resolution: " + stats.resolutionWidth + "x" + stats.resolutionHeight);
+    console.log("Frame Rate: " + stats.frameRate + " fps");
+    console.log("RTT: " + stats.currentRoundTripTime + " ms");
+}
+```
+
+## Best Practices
+
+### 1. Handle Stream Availability
+
+```javascript
+function playStream(streamId) {
+    // Check if stream exists before playing
+    fetch('https://server.com:5443/WebRTCAppEE/rest/v2/broadcasts/' + streamId)
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === "broadcasting") {
+                webRTCAdaptor.play(streamId);
+            } else {
+                console.log("Stream is not live yet");
+            }
+        });
+}
+```
+
+### 2. Auto-Reconnect on Failure
+
+```javascript
+var reconnectInterval;
+
+callbackError: function(error, message) {
+    if (error == "ice_connection_state_failed" || error == "playTimeoutError") {
+        // Attempt reconnection after delay
+        reconnectInterval = setTimeout(function() {
+            console.log("Attempting to reconnect...");
+            webRTCAdaptor.stop(streamId);
+            webRTCAdaptor.play(streamId);
+        }, 3000);
+    }
+}
+```
+
+### 3. Clean Up Resources
+
+```javascript
+function stopPlayback() {
+    // Stop playing
+    webRTCAdaptor.stop(streamId);
+    
+    // Close WebSocket
+    webRTCAdaptor.closeWebSocket();
+    
+    // Clear video element
+    document.getElementById("remoteVideo").srcObject = null;
+}
+```
+
+### 4. Handle Mobile Browsers
+
+```javascript
+// iOS Safari requires user interaction to play
+var playButton = document.getElementById("playButton");
+playButton.addEventListener("click", function() {
+    webRTCAdaptor.play(streamId);
+});
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**Issue: Video not playing**
+- Check if stream exists and is live
+- Verify remoteVideoId matches video element ID
+- Ensure autoplay is enabled on video element
+- Check browser autoplay policies (may require muted or user interaction)
+
+**Issue: High latency**
+- Check network conditions and bandwidth
+- Verify WebRTC ports are not blocked
+- Consider using TURN server if behind restrictive firewall
+- Check server load and available resources
+
+**Issue: Playback keeps buffering**
+- Network bandwidth insufficient for stream quality
+- Let adaptive bitrate algorithm adjust quality
+- Check for packet loss in statistics
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Publishing Streams" icon="video" href="/api/webrtc/publishing">
+    Learn how to publish WebRTC streams
+  </Card>
+  <Card title="Peer-to-Peer" icon="users" href="/api/webrtc/peer-to-peer">
+    Build P2P applications with WebRTC
+  </Card>
+</CardGroup>

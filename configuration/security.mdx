@@ -1,0 +1,461 @@
+---
+title: "Security Configuration"
+description: "Security and access control settings for Ant Media Server"
+---
+
+Ant Media Server provides multiple layers of security to protect your streams and control access. This guide covers all security-related configuration options.
+
+## Token-Based Security
+
+### Hash-Based Tokens
+
+Hash-based tokens provide secure, one-time access control using HMAC signatures.
+
+<ParamField path="hashControlPublishEnabled" type="boolean" default="false">
+  Enable hash-based access control for publishing streams.
+  
+  When enabled, publishers must provide a valid hash token to start streaming.
+</ParamField>
+
+<ParamField path="hashControlPlayEnabled" type="boolean" default="false">
+  Enable hash-based access control for playing streams.
+  
+  When enabled, viewers must provide a valid hash token to watch streams.
+</ParamField>
+
+<ParamField path="tokenHashSecret" type="string" default="">
+  Secret key used for generating and validating hash-based tokens.
+  
+  **Important:** Keep this secret secure and never expose it in client-side code.
+  
+  **Usage:**
+  ```
+  hash = base64(hmac_sha256(streamId + role + expireDate, tokenHashSecret))
+  ```
+</ParamField>
+
+### One-Time Tokens
+
+One-time tokens provide session-specific access that expires after use.
+
+<ParamField path="publishTokenControlEnabled" type="boolean" default="false">
+  Enable one-time token control for publishing.
+  
+  Tokens must be generated via REST API and are valid for a single publish session.
+</ParamField>
+
+<ParamField path="playTokenControlEnabled" type="boolean" default="false">
+  Enable one-time token control for playing.
+  
+  Tokens must be generated via REST API and are valid for a single play session.
+</ParamField>
+
+### Time-Based Tokens (TOTP)
+
+TOTP (Time-based One-Time Password) tokens provide time-limited access without requiring server-side token storage.
+
+<ParamField path="enableTimeTokenForPublish" type="boolean" default="false">
+  Enable TOTP authentication for publishing streams.
+</ParamField>
+
+<ParamField path="timeTokenSecretForPublish" type="string" default="null">
+  TOTP secret for publishing authentication.
+  
+  If subscriber is not in database, the server validates TOTP code against this secret.
+</ParamField>
+
+<ParamField path="enableTimeTokenForPlay" type="boolean" default="false">
+  Enable TOTP authentication for playing streams.
+</ParamField>
+
+<ParamField path="timeTokenSecretForPlay" type="string" default="null">
+  TOTP secret for play authentication.
+  
+  If subscriber is not in database, the server validates TOTP code against this secret.
+</ParamField>
+
+<ParamField path="timeTokenPeriod" type="int" default="60">
+  TOTP token validity period in seconds.
+  
+  Standard TOTP implementations use 30 or 60 seconds.
+</ParamField>
+
+## JWT Authentication
+
+### Application-Level JWT
+
+<ParamField path="jwtControlEnabled" type="boolean" default="false">
+  Enable JWT authentication for REST API access at the application level.
+</ParamField>
+
+<ParamField path="jwtSecretKey" type="string" default="">
+  JWT secret key for application-level authentication.
+  
+  Used to sign and validate JWT tokens for REST API endpoints.
+</ParamField>
+
+<ParamField path="jwksURL" type="string" default="">
+  JWKS (JSON Web Key Set) URL for JWT validation.
+  
+  If set, JWKS is used for validation instead of the secret key. Effective only if jwtControlEnabled is true.
+</ParamField>
+
+### Stream-Level JWT
+
+<ParamField path="publishJwtControlEnabled" type="boolean" default="false">
+  Enable JWT token filter for publishing streams.
+</ParamField>
+
+<ParamField path="playJwtControlEnabled" type="boolean" default="false">
+  Enable JWT token filter for playing streams.
+</ParamField>
+
+<ParamField path="jwtStreamSecretKey" type="string" default="">
+  JWT secret key for stream-level authentication.
+  
+  **Important:** Must be at least 32 characters long.
+</ParamField>
+
+### Server-Level JWT
+
+Configured in server settings (`red5.properties`):
+
+<ParamField path="jwtServerControlEnabled" type="boolean" default="false">
+  Enable JWT authentication for server-level REST API and web panel access.
+</ParamField>
+
+<ParamField path="jwtServerSecretKey" type="string" default="null">
+  JWT secret key for server-level authentication.
+</ParamField>
+
+## IP Filtering
+
+### Application Access Control
+
+<ParamField path="ipFilterEnabled" type="boolean" default="true">
+  Enable IP filtering for the application.
+</ParamField>
+
+<ParamField path="remoteAllowedCIDR" type="string" default="127.0.0.1">
+  Comma-separated CIDR addresses allowed to access the REST API.
+  
+  **Format:** `a.b.c.d/x`
+  
+  **Examples:**
+  - `192.168.1.0/24` - Entire subnet
+  - `10.0.0.5/32` - Single IP
+  - `192.168.1.0/24,10.0.0.5/32` - Multiple ranges
+</ParamField>
+
+<ParamField path="allowedPublisherCIDR" type="string" default="">
+  Comma-separated CIDR addresses allowed to publish streams.
+  
+  Empty string means accept publishers from anywhere.
+  
+  **Examples:**
+  - `192.168.0.0/16` - Private network only
+  - `203.0.113.0/24` - Specific public subnet
+</ParamField>
+
+### Dashboard Access Control
+
+Configured in server settings:
+
+<ParamField path="allowedDashboardCIDR" type="string" default="0.0.0.0/0">
+  IP addresses allowed to access the web panel.
+  
+  **Production recommendation:** Restrict to admin IP addresses only.
+  
+  **Example:**
+  ```
+  server.allowed_dashboard_CIDR=192.168.1.0/24,10.0.0.100/32
+  ```
+</ParamField>
+
+## Webhook Authentication
+
+<ParamField path="webhookAuthenticateURL" type="string" default="">
+  Webhook URL called to authenticate publishing attempts.
+  
+  The server sends a POST request with stream details. The webhook should return:
+  - HTTP 200 - Allow publishing
+  - HTTP 403 - Deny publishing
+  
+  **Request format:**
+  ```json
+  {
+    "streamId": "stream123",
+    "action": "publish",
+    "clientIp": "192.168.1.100"
+  }
+  ```
+</ParamField>
+
+<ParamField path="webhookPlayAuthUrl" type="string" default="">
+  Webhook URL for WebRTC play authentication.
+  
+  Similar to webhookAuthenticateURL but for play requests.
+</ParamField>
+
+## Subscriber Authentication
+
+<ParamField path="subscriberAuthenticationKey" type="string" default="random">
+  Secret key for subscriber JWT authentication (push notifications).
+  
+  JWT tokens for subscribers should be generated with:
+  ```
+  subscriberId + subscriberAuthenticationKey
+  ```
+  
+  Default value is a randomly generated 32-character string.
+</ParamField>
+
+<ParamField path="secureAnalyticEndpoint" type="boolean" default="false">
+  Require JWT token for analytics events.
+  
+  Uses `jwtSecretKey` for validation.
+</ParamField>
+
+## Stream Access Control
+
+<ParamField path="acceptOnlyStreamsInDataStore" type="boolean" default="false">
+  Only accept streams that are pre-registered in the database.
+  
+  When enabled:
+  1. Create stream via REST API: `POST /broadcast/create`
+  2. Only streams with matching stream IDs can publish
+  3. Attempts to publish unregistered streams are rejected
+</ParamField>
+
+<ParamField path="acceptOnlyRoomsInDataStore" type="boolean" default="false">
+  Only accept conference rooms that are pre-registered in the database.
+</ParamField>
+
+## SSL/TLS Configuration
+
+### HTTPS
+
+Configured in server settings:
+
+```bash
+# Install SSL certificate
+sudo ./enable_ssl.sh -d yourdomain.com
+```
+
+This automatically:
+- Obtains Let's Encrypt certificate
+- Configures HTTPS on port 5443
+- Enables automatic certificate renewal
+- Sets `sslEnabled=true`
+
+### RTMPS
+
+<ParamField path="rtmpsEnabled" type="boolean" default="false">
+  Enable RTMPS (RTMP over SSL/TLS).
+  
+  Requires SSL certificate to be installed first.
+</ParamField>
+
+## Content Security Policy
+
+<ParamField path="contentSecurityPolicyHeaderValue" type="string" default="">
+  Value for Content-Security-Policy HTTP response header.
+  
+  Helps reduce XSS risks by declaring which resources can be loaded.
+  
+  **Example:**
+  ```
+  default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'
+  ```
+  
+  See [MDN CSP documentation](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP) for details.
+</ParamField>
+
+## Security Best Practices
+
+### 1. Enable Multiple Security Layers
+
+For production environments, use multiple security mechanisms:
+
+```properties
+# Enable token control
+publishTokenControlEnabled=true
+playTokenControlEnabled=true
+
+# Enable IP filtering
+ipFilterEnabled=true
+allowedPublisherCIDR=192.168.0.0/16
+
+# Require pre-registration
+acceptOnlyStreamsInDataStore=true
+```
+
+### 2. Secure Secret Keys
+
+- Use cryptographically random keys (at least 32 characters)
+- Never commit secrets to version control
+- Rotate secrets periodically
+- Use different secrets for different purposes
+
+```bash
+# Generate secure random key
+openssl rand -base64 32
+```
+
+### 3. Restrict Access by IP
+
+```properties
+# Production: Restrict dashboard to admin network
+server.allowed_dashboard_CIDR=10.0.1.0/24
+
+# Production: Restrict publishers to known locations
+allowedPublisherCIDR=203.0.113.0/24,198.51.100.0/24
+
+# Production: Restrict REST API access
+remoteAllowedCIDR=192.168.1.0/24
+```
+
+### 4. Use HTTPS/RTMPS in Production
+
+```bash
+# Install SSL certificate
+sudo ./enable_ssl.sh -d stream.example.com
+```
+
+```properties
+# Enable RTMPS
+rtmps.enabled=true
+```
+
+### 5. Implement Webhook Authentication
+
+```properties
+webhookAuthenticateURL=https://api.example.com/validate-publish
+webhookPlayAuthUrl=https://api.example.com/validate-play
+```
+
+Webhook server example:
+
+```javascript
+app.post('/validate-publish', (req, res) => {
+  const { streamId, clientIp } = req.body;
+  
+  // Validate publisher
+  if (isAuthorized(streamId, clientIp)) {
+    res.status(200).send('OK');
+  } else {
+    res.status(403).send('Forbidden');
+  }
+});
+```
+
+### 6. Use JWT for API Access
+
+```properties
+# Server-level (dashboard + REST API)
+server.jwtServerControlEnabled=true
+server.jwtServerSecretKey=your-secure-server-secret
+
+# Application-level (REST API)
+jwtControlEnabled=true
+jwtSecretKey=your-secure-app-secret
+
+# Stream-level (publish/play)
+publishJwtControlEnabled=true
+playJwtControlEnabled=true
+jwtStreamSecretKey=your-secure-stream-secret
+```
+
+### 7. Monitor and Audit
+
+- Enable logging for security events
+- Monitor failed authentication attempts  
+- Review access logs regularly
+- Set up alerts for suspicious activity
+
+```properties
+# Enable detailed logging
+logLevel=INFO
+
+# Monitor via webhook
+server.serverStatusWebHookURL=https://api.example.com/server-status
+```
+
+## Security Configuration Examples
+
+### Minimal Security (Development)
+
+```properties
+# Allow all access for testing
+remoteAllowedCIDR=0.0.0.0/0
+ipFilterEnabled=false
+```
+
+### Moderate Security (Staging)
+
+```properties
+# Token-based access
+publishTokenControlEnabled=true
+playTokenControlEnabled=true
+
+# IP filtering for REST API
+ipFilterEnabled=true
+remoteAllowedCIDR=192.168.1.0/24
+```
+
+### Maximum Security (Production)
+
+```properties
+# Multiple token mechanisms
+publishTokenControlEnabled=true
+playTokenControlEnabled=true
+publishJwtControlEnabled=true
+playJwtControlEnabled=true
+jwtStreamSecretKey=<32-char-secret>
+
+# Strict IP filtering
+ipFilterEnabled=true
+remoteAllowedCIDR=10.0.0.0/8
+allowedPublisherCIDR=203.0.113.0/24
+
+# Pre-registration required
+acceptOnlyStreamsInDataStore=true
+acceptOnlyRoomsInDataStore=true
+
+# Webhook validation
+webhookAuthenticateURL=https://api.example.com/auth
+webhookPlayAuthUrl=https://api.example.com/auth-play
+
+# SSL/TLS
+rtmps.enabled=true
+
+# JWT for REST API
+jwtControlEnabled=true
+jwtSecretKey=<32-char-secret>
+server.jwtServerControlEnabled=true
+server.jwtServerSecretKey=<32-char-secret>
+```
+
+## Troubleshooting
+
+### Unable to Publish/Play
+
+1. Check if token control is enabled
+2. Verify token is valid and not expired
+3. Check IP is in allowedPublisherCIDR (for publishing)
+4. Review webhook response (if enabled)
+5. Check server logs for rejection reason
+
+### JWT Validation Failures
+
+1. Verify secret key is correct
+2. Check token hasn't expired
+3. Ensure token signature algorithm matches (HS256)
+4. Validate token payload includes required claims
+
+### IP Filter Issues
+
+1. Verify CIDR notation is correct
+2. Check client IP (may be proxy IP if behind load balancer)
+3. Temporarily disable to test: `ipFilterEnabled=false`
+4. Review server logs for rejected IPs

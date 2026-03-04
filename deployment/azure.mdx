@@ -1,0 +1,593 @@
+---
+title: "Azure Deployment"
+description: "Deploy Ant Media Server on Microsoft Azure using Virtual Machines, Marketplace, and scale sets for enterprise streaming solutions"
+---
+
+## Overview
+
+Ant Media Server can be deployed on Microsoft Azure using Azure Virtual Machines (VMs), Azure Marketplace one-click deployment, or Azure Virtual Machine Scale Sets (VMSS) for auto-scaling capabilities.
+
+## Deployment Methods
+
+### Azure Marketplace (Recommended)
+
+Deploy Ant Media Server directly from Azure Marketplace:
+
+- **Community Edition**: [Azure Marketplace Link](https://azuremarketplace.microsoft.com/en-us/marketplace/apps/antmedia.ams_community_edition)
+- **Enterprise Edition**: [Azure Marketplace Link](https://azuremarketplace.microsoft.com/en-us/marketplace/apps/antmedia.ant_media_server_enterprise)
+
+### Manual VM Deployment
+
+Deploy on a standard Azure VM with custom configuration.
+
+### Azure Virtual Machine Scale Sets
+
+Automated scaling using VMSS for high-traffic scenarios.
+
+## Virtual Machine Requirements
+
+### VM Sizes
+
+**Development/Testing**:
+- VM Size: `Standard_B2s` or `Standard_B2ms`
+- vCPUs: 2
+- Memory: 4-8 GB
+- Cost: ~$30-60/month
+
+**Production (Recommended)**:
+- VM Size: `Standard_F4s_v2` or `Standard_D4s_v3`
+- vCPUs: 4
+- Memory: 8-16 GB
+- Network: Accelerated Networking enabled
+- Cost: ~$150-300/month
+
+**High-Performance Streaming**:
+- VM Size: `Standard_F8s_v2`, `Standard_D8s_v3`
+- vCPUs: 8-16
+- Memory: 16-32 GB
+- Network: Accelerated Networking (25 Gbps+)
+- Premium SSD storage
+- Cost: ~$300-600/month
+
+### Operating System Images
+
+**Supported Images**:
+- Ubuntu Server 20.04 LTS
+- Ubuntu Server 22.04 LTS
+- Debian 11
+- Red Hat Enterprise Linux 8
+- CentOS 8 Stream
+
+<Note>
+Ubuntu 20.04 LTS or 22.04 LTS is recommended for optimal compatibility with Ant Media Server.
+</Note>
+
+### Storage
+
+- **OS Disk**: 30 GB minimum (Premium SSD recommended)
+- **Data Disk**: 100-500 GB for recordings (Premium SSD or Ultra Disk)
+- **Disk Type**: Premium SSD for production workloads
+
+## Quick Start: Azure Marketplace Deployment
+
+<Steps>
+  <Step title="Access Azure Marketplace">
+    1. Log into Azure Portal (https://portal.azure.com)
+    2. Search for "Ant Media Server" in the Marketplace
+    3. Select Community or Enterprise Edition
+    4. Click **Create**
+  </Step>
+
+  <Step title="Configure Basics">
+    Fill in the basic configuration:
+
+    - **Subscription**: Select your Azure subscription
+    - **Resource Group**: Create new or select existing
+    - **Region**: Choose nearest region (e.g., East US, West Europe)
+    - **VM Name**: antmedia-server-01
+    - **Authentication**: SSH public key (recommended) or password
+  </Step>
+
+  <Step title="Configure VM Size">
+    Select appropriate VM size:
+
+    - Click **Change size**
+    - Filter by compute-optimized (F-series) or general-purpose (D-series)
+    - Select `Standard_F4s_v2` or larger
+    - Enable **Accelerated Networking** if available
+  </Step>
+
+  <Step title="Configure Networking">
+    Network settings:
+
+    - **Virtual Network**: Create new or select existing
+    - **Subnet**: Default or custom subnet
+    - **Public IP**: Create new static IP
+    - **NIC Network Security Group**: Advanced
+    - **Configure NSG**: Add inbound rules (see below)
+  </Step>
+
+  <Step title="Review and Create">
+    1. Review all settings
+    2. Click **Create**
+    3. Wait for deployment (5-10 minutes)
+    4. Navigate to resource once complete
+  </Step>
+
+  <Step title="Access Web Panel">
+    Get the public IP address:
+
+    1. Go to Virtual Machine resource
+    2. Copy Public IP address
+    3. Open browser: `http://PUBLIC_IP:5080`
+    4. Create admin account on first access
+  </Step>
+</Steps>
+
+## Manual VM Deployment
+
+<Steps>
+  <Step title="Create Virtual Machine">
+    Using Azure CLI:
+
+    ```bash
+    # Create resource group
+    az group create --name antmedia-rg --location eastus
+
+    # Create VM
+    az vm create \
+      --resource-group antmedia-rg \
+      --name antmedia-server \
+      --image Ubuntu2204 \
+      --size Standard_F4s_v2 \
+      --admin-username azureuser \
+      --ssh-key-values ~/.ssh/id_rsa.pub \
+      --public-ip-sku Standard \
+      --accelerated-networking true
+    ```
+  </Step>
+
+  <Step title="Connect to VM">
+    SSH into your VM:
+
+    ```bash
+    # Get public IP
+    IP=$(az vm show -d -g antmedia-rg -n antmedia-server --query publicIps -o tsv)
+
+    # Connect
+    ssh azureuser@$IP
+    ```
+  </Step>
+
+  <Step title="Install Ant Media Server">
+    Download and install:
+
+    ```bash
+    wget https://raw.githubusercontent.com/ant-media/Scripts/master/install_ant-media-server.sh
+    chmod +x install_ant-media-server.sh
+    sudo ./install_ant-media-server.sh
+    ```
+  </Step>
+
+  <Step title="Configure Firewall">
+    Open required ports in NSG (see section below)
+  </Step>
+</Steps>
+
+## Network Security Group (NSG) Configuration
+
+### Required Inbound Rules
+
+Create NSG rules for required ports:
+
+| Priority | Name | Port | Protocol | Source | Destination | Action |
+|----------|------|------|----------|--------|-------------|--------|
+| 100 | Allow-HTTP | 5080 | TCP | Any | Any | Allow |
+| 110 | Allow-HTTPS | 5443 | TCP | Any | Any | Allow |
+| 120 | Allow-RTMP | 1935 | TCP | Any | Any | Allow |
+| 130 | Allow-RTMPS | 8443 | TCP | Any | Any | Allow |
+| 140 | Allow-WebRTC | 5000-65000 | UDP | Any | Any | Allow |
+| 200 | Allow-SSH | 22 | TCP | Your IP | Any | Allow |
+
+### Using Azure CLI
+
+```bash
+# Create NSG
+az network nsg create \
+  --resource-group antmedia-rg \
+  --name antmedia-nsg
+
+# Add rules
+az network nsg rule create --resource-group antmedia-rg --nsg-name antmedia-nsg \
+  --name Allow-HTTP --priority 100 --source-address-prefixes '*' \
+  --destination-port-ranges 5080 --protocol Tcp --access Allow
+
+az network nsg rule create --resource-group antmedia-rg --nsg-name antmedia-nsg \
+  --name Allow-HTTPS --priority 110 --source-address-prefixes '*' \
+  --destination-port-ranges 5443 --protocol Tcp --access Allow
+
+az network nsg rule create --resource-group antmedia-rg --nsg-name antmedia-nsg \
+  --name Allow-RTMP --priority 120 --source-address-prefixes '*' \
+  --destination-port-ranges 1935 --protocol Tcp --access Allow
+
+az network nsg rule create --resource-group antmedia-rg --nsg-name antmedia-nsg \
+  --name Allow-WebRTC --priority 140 --source-address-prefixes '*' \
+  --destination-port-ranges 5000-65000 --protocol Udp --access Allow
+
+az network nsg rule create --resource-group antmedia-rg --nsg-name antmedia-nsg \
+  --name Allow-SSH --priority 200 --source-address-prefixes 'YOUR_IP' \
+  --destination-port-ranges 22 --protocol Tcp --access Allow
+```
+
+<Warning>
+Restrict SSH (port 22) to specific IP addresses for security. Replace 'YOUR_IP' with your actual IP address.
+</Warning>
+
+## Public IP Configuration
+
+### Create Static Public IP
+
+```bash
+# Create static public IP
+az network public-ip create \
+  --resource-group antmedia-rg \
+  --name antmedia-public-ip \
+  --sku Standard \
+  --allocation-method Static
+
+# Associate with VM
+az network nic ip-config update \
+  --resource-group antmedia-rg \
+  --nic-name antmediaVMNic \
+  --name ipconfig1 \
+  --public-ip-address antmedia-public-ip
+```
+
+### Configure DNS Label
+
+```bash
+# Add DNS name
+az network public-ip update \
+  --resource-group antmedia-rg \
+  --name antmedia-public-ip \
+  --dns-name antmedia-server
+
+# Access via: antmedia-server.eastus.cloudapp.azure.com
+```
+
+### Update Server Configuration
+
+```bash
+sudo nano /usr/local/antmedia/conf/red5.properties
+```
+
+Set your domain or public IP:
+```properties
+server.name=antmedia-server.eastus.cloudapp.azure.com
+```
+
+Restart:
+```bash
+sudo systemctl restart antmedia
+```
+
+## Virtual Machine Scale Sets (Auto-Scaling)
+
+### Create VMSS with Azure CLI
+
+```bash
+# Create scale set
+az vmss create \
+  --resource-group antmedia-rg \
+  --name antmedia-vmss \
+  --image Ubuntu2204 \
+  --vm-sku Standard_F4s_v2 \
+  --instance-count 2 \
+  --admin-username azureuser \
+  --ssh-key-values ~/.ssh/id_rsa.pub \
+  --public-ip-per-vm \
+  --load-balancer antmedia-lb \
+  --backend-pool-name antmedia-pool \
+  --upgrade-policy-mode Automatic
+```
+
+### Configure Auto-Scaling Rules
+
+```bash
+# Scale out when CPU > 75%
+az monitor autoscale create \
+  --resource-group antmedia-rg \
+  --resource antmedia-vmss \
+  --resource-type Microsoft.Compute/virtualMachineScaleSets \
+  --name antmedia-autoscale \
+  --min-count 2 \
+  --max-count 10 \
+  --count 2
+
+az monitor autoscale rule create \
+  --resource-group antmedia-rg \
+  --autoscale-name antmedia-autoscale \
+  --condition "Percentage CPU > 75 avg 5m" \
+  --scale out 2
+
+# Scale in when CPU < 30%
+az monitor autoscale rule create \
+  --resource-group antmedia-rg \
+  --autoscale-name antmedia-autoscale \
+  --condition "Percentage CPU < 30 avg 5m" \
+  --scale in 1
+```
+
+### Custom Script Extension
+
+Automate Ant Media Server installation on VMSS:
+
+```bash
+az vmss extension set \
+  --resource-group antmedia-rg \
+  --vmss-name antmedia-vmss \
+  --name CustomScript \
+  --publisher Microsoft.Azure.Extensions \
+  --version 2.1 \
+  --settings '{"fileUris": ["https://raw.githubusercontent.com/ant-media/Scripts/master/install_ant-media-server.sh"], "commandToExecute": "bash install_ant-media-server.sh"}'
+```
+
+## Load Balancer Configuration
+
+### Create Application Gateway
+
+For advanced load balancing with SSL termination:
+
+```bash
+# Create Application Gateway
+az network application-gateway create \
+  --name antmedia-appgw \
+  --resource-group antmedia-rg \
+  --location eastus \
+  --sku Standard_v2 \
+  --public-ip-address antmedia-gateway-ip \
+  --vnet-name antmedia-vnet \
+  --subnet gateway-subnet \
+  --capacity 2 \
+  --http-settings-cookie-based-affinity Disabled \
+  --http-settings-port 5080 \
+  --http-settings-protocol Http \
+  --frontend-port 80
+```
+
+### Health Probe Configuration
+
+Configure health probes for backend pool:
+
+```bash
+az network application-gateway probe create \
+  --gateway-name antmedia-appgw \
+  --resource-group antmedia-rg \
+  --name antmedia-health \
+  --protocol Http \
+  --host-name-from-http-settings true \
+  --match-status-codes 200-399 \
+  --path / \
+  --interval 30 \
+  --timeout 30 \
+  --threshold 3
+```
+
+## Storage Configuration
+
+### Attach Managed Disk
+
+```bash
+# Create managed disk
+az disk create \
+  --resource-group antmedia-rg \
+  --name antmedia-data-disk \
+  --size-gb 100 \
+  --sku Premium_LRS
+
+# Attach to VM
+az vm disk attach \
+  --resource-group antmedia-rg \
+  --vm-name antmedia-server \
+  --name antmedia-data-disk
+```
+
+Mount the disk:
+
+```bash
+# Inside VM
+sudo fdisk -l
+sudo mkfs -t ext4 /dev/sdc
+sudo mkdir -p /mnt/streams
+sudo mount /dev/sdc /mnt/streams
+echo '/dev/sdc /mnt/streams ext4 defaults,nofail 0 2' | sudo tee -a /etc/fstab
+sudo chown -R antmedia:antmedia /mnt/streams
+```
+
+### Azure Blob Storage Integration
+
+Configure blob storage for recordings:
+
+```bash
+# Create storage account
+az storage account create \
+  --name antmediastorage \
+  --resource-group antmedia-rg \
+  --location eastus \
+  --sku Standard_LRS
+
+# Create container
+az storage container create \
+  --name recordings \
+  --account-name antmediastorage \
+  --public-access off
+
+# Get connection string
+az storage account show-connection-string \
+  --name antmediastorage \
+  --resource-group antmedia-rg
+```
+
+Configure in application settings via web panel.
+
+## Database Configuration (Enterprise)
+
+### Azure Cosmos DB (MongoDB API)
+
+```bash
+# Create Cosmos DB account
+az cosmosdb create \
+  --name antmedia-cosmos \
+  --resource-group antmedia-rg \
+  --kind MongoDB \
+  --server-version 4.2 \
+  --default-consistency-level Session
+
+# Create database
+az cosmosdb mongodb database create \
+  --account-name antmedia-cosmos \
+  --resource-group antmedia-rg \
+  --name antmedia
+
+# Get connection string
+az cosmosdb keys list \
+  --name antmedia-cosmos \
+  --resource-group antmedia-rg \
+  --type connection-strings
+```
+
+### Configure Cluster Mode
+
+```bash
+sudo /usr/local/antmedia/change_server_mode.sh cluster "mongodb://antmedia-cosmos:PASSWORD@antmedia-cosmos.mongo.cosmos.azure.com:10255/?ssl=true&replicaSet=globaldb&retrywrites=false&maxIdleTimeMS=120000"
+```
+
+## SSL/TLS Configuration
+
+### Using Application Gateway with SSL
+
+1. Upload SSL certificate to Azure Key Vault
+2. Configure Application Gateway listener with certificate
+3. Set up HTTP to HTTPS redirect
+
+### Using Let's Encrypt on VM
+
+```bash
+sudo /usr/local/antmedia/enable_ssl.sh -d yourdomain.com -e admin@yourdomain.com
+```
+
+## Monitoring with Azure Monitor
+
+### Enable VM Insights
+
+```bash
+az vm extension set \
+  --resource-group antmedia-rg \
+  --vm-name antmedia-server \
+  --name AzureMonitorLinuxAgent \
+  --publisher Microsoft.Azure.Monitor \
+  --enable-auto-upgrade true
+```
+
+### Create Alerts
+
+```bash
+# CPU alert
+az monitor metrics alert create \
+  --name HighCPU \
+  --resource-group antmedia-rg \
+  --scopes /subscriptions/SUB_ID/resourceGroups/antmedia-rg/providers/Microsoft.Compute/virtualMachines/antmedia-server \
+  --condition "avg Percentage CPU > 80" \
+  --window-size 5m \
+  --evaluation-frequency 1m
+```
+
+## Backup and Disaster Recovery
+
+### Azure Backup
+
+```bash
+# Create Recovery Services vault
+az backup vault create \
+  --resource-group antmedia-rg \
+  --name antmedia-vault \
+  --location eastus
+
+# Enable backup for VM
+az backup protection enable-for-vm \
+  --resource-group antmedia-rg \
+  --vault-name antmedia-vault \
+  --vm antmedia-server \
+  --policy-name DefaultPolicy
+```
+
+### Snapshot-based Backup
+
+```bash
+# Create disk snapshot
+az snapshot create \
+  --resource-group antmedia-rg \
+  --name antmedia-snapshot-$(date +%Y%m%d) \
+  --source antmedia-server_OsDisk_1
+```
+
+## Cost Optimization
+
+### Reserved Instances
+
+Purchase Azure Reserved VM Instances for up to 72% savings on production workloads.
+
+### Auto-Shutdown Schedule
+
+```bash
+az vm auto-shutdown \
+  --resource-group antmedia-rg \
+  --name antmedia-server \
+  --time 2300 \
+  --timezone "Eastern Standard Time"
+```
+
+### Spot Instances
+
+For non-critical workloads:
+
+```bash
+az vm create \
+  --resource-group antmedia-rg \
+  --name antmedia-spot \
+  --image Ubuntu2204 \
+  --size Standard_F4s_v2 \
+  --priority Spot \
+  --max-price -1 \
+  --eviction-policy Deallocate
+```
+
+## Troubleshooting
+
+### VM Not Accessible
+
+1. Check NSG rules in Azure Portal
+2. Verify VM is running
+3. Check public IP association
+4. Review boot diagnostics logs
+
+### Performance Issues
+
+1. Check Azure Monitor metrics
+2. Verify accelerated networking is enabled
+3. Check disk IOPS and throughput
+4. Review application logs
+
+### WebRTC Connection Issues
+
+1. Verify UDP ports 5000-65000 in NSG
+2. Check public IP configuration
+3. Ensure server.name is correctly set
+4. Test with STUN servers
+
+## Next Steps
+
+- [Configure SSL/TLS](/deployment/ssl-setup)
+- [Set up clustering](/features/clustering)
+- [Configure Azure CDN](/advanced/cdn-integration)
+- [Implement monitoring](/operations/monitoring)

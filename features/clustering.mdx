@@ -1,0 +1,499 @@
+---
+title: Clustering & Scalability
+description: Scale Ant Media Server horizontally with clustering for high availability and load distribution
+---
+
+## Overview
+
+Ant Media Server supports clustering to handle thousands of concurrent streams by distributing the load across multiple server instances. The clustering architecture provides:
+
+- **High Availability** - Automatic failover if a node goes down
+- **Load Distribution** - Streams distributed across available nodes
+- **Horizontal Scaling** - Add more nodes to increase capacity
+- **Centralized Management** - Manage all nodes from a single interface
+
+<Frame>
+  <img src="/images/cluster-architecture.png" alt="Cluster architecture diagram" />
+</Frame>
+
+## Architecture
+
+An Ant Media Server cluster consists of:
+
+### Origin Nodes
+
+Handle stream ingestion and processing:
+- Accept incoming streams (RTMP, WebRTC, etc.)
+- Perform transcoding
+- Generate HLS/DASH segments
+- Store stream metadata in shared database
+
+### Edge Nodes
+
+Deliver streams to viewers:
+- Serve HLS/DASH playlists and segments
+- Handle WebRTC playback
+- Fetch stream data from origin nodes
+- Reduce load on origin servers
+
+### MongoDB Database
+
+Centralized data store:
+- Stream metadata and status
+- Application settings
+- VoD records
+- Analytics data
+
+### Load Balancer
+
+Distributes traffic across nodes:
+- Routes incoming streams to available origins
+- Directs viewers to edge nodes
+- Performs health checks
+- Handles SSL termination
+
+## Cluster Communication
+
+Nodes communicate through the cluster interfaces:
+
+<CodeGroup>
+```java IClusterNotifier.java
+public interface IClusterNotifier {
+    public static final String BEAN_NAME = "tomcat.cluster";
+    
+    public IClusterStore getClusterStore();
+    
+    public void registerSettingUpdateListener(String appName, 
+                                             IAppSettingsUpdateListener listener);
+    
+    public void registerCreateAppListener(ICreateAppListener createAppListener);
+    
+    public void registerDeleteAppListener(IDeleteAppListener deleteAppListener);
+}
+```
+
+```java ClusterNode.java
+@Entity("clusternode")
+public class ClusterNode {
+    private String id;                    // Unique node identifier
+    private String ip;                    // Node IP address  
+    private long lastUpdateTime;          // Last heartbeat timestamp
+    private String memory;                // Memory usage
+    private String cpu;                   // CPU usage
+    private int dbQueryAverageTimeMs;     // DB performance metric
+    private String status;                // "alive" or "dead"
+    
+    public static final long NODE_UPDATE_PERIOD = 5000; // 5 seconds
+    
+    public String getStatus() {
+        if ((System.currentTimeMillis() - lastUpdateTime) > (NODE_UPDATE_PERIOD * 4)) {
+            status = ClusterNode.DEAD;
+        } else {
+            status = ClusterNode.ALIVE;
+        }
+        return status;
+    }
+}
+```
+</CodeGroup>
+
+### Node Health Monitoring
+
+Each node updates its status every 5 seconds. A node is considered **dead** if it hasn't updated in 20 seconds (4 × update period).
+
+## Setup Guide
+
+### Prerequisites
+
+<Steps>
+  <Step title="Install MongoDB">
+    Set up a MongoDB instance accessible by all cluster nodes:
+    
+    ```bash
+    # Install MongoDB
+    sudo apt-get update
+    sudo apt-get install -y mongodb-org
+    
+    # Start MongoDB
+    sudo systemctl start mongod
+    sudo systemctl enable mongod
+    ```
+  </Step>
+  
+  <Step title="Configure Load Balancer">
+    Install and configure Nginx or HAProxy:
+    
+    ```nginx nginx.conf
+    upstream ams_origin {
+        ip_hash;
+        server 192.168.1.10:5080;
+        server 192.168.1.11:5080;
+    }
+    
+    upstream ams_edge {
+        least_conn;
+        server 192.168.1.20:5080;
+        server 192.168.1.21:5080;
+        server 192.168.1.22:5080;
+    }
+    
+    server {
+        listen 80;
+        
+        # Route publishing to origin nodes
+        location /LiveApp/streams {
+            proxy_pass http://ams_origin;
+        }
+        
+        # Route playback to edge nodes  
+        location /LiveApp/play {
+            proxy_pass http://ams_edge;
+        }
+    }
+    ```
+  </Step>
+  
+  <Step title="Install Ant Media Server">
+    Install AMS on each cluster node using the standard installation process.
+  </Step>
+</Steps>
+
+### Configure Origin Nodes
+
+On each origin server, edit `/usr/local/antmedia/conf/red5.properties`:
+
+<CodeGroup>
+```properties Origin Configuration
+# Server mode
+server.mode=origin
+
+# MongoDB connection
+db.type=mongodb
+db.host=192.168.1.5:27017
+db.name=antmediadb
+
+# Cluster settings
+cluster.enabled=true
+cluster.node.id=origin-1
+cluster.node.ip=192.168.1.10
+```
+</CodeGroup>
+
+Restart the service:
+
+```bash
+sudo systemctl restart antmedia
+```
+
+### Configure Edge Nodes
+
+On each edge server:
+
+<CodeGroup>
+```properties Edge Configuration  
+# Server mode
+server.mode=edge
+
+# MongoDB connection  
+db.type=mongodb
+db.host=192.168.1.5:27017
+db.name=antmediadb
+
+# Cluster settings
+cluster.enabled=true
+cluster.node.id=edge-1
+cluster.node.ip=192.168.1.20
+
+# Origin nodes for stream fetching
+cluster.origin.nodes=192.168.1.10:5080,192.168.1.11:5080
+```
+</CodeGroup>
+
+## Stream Distribution
+
+### Publishing Flow
+
+<Steps>
+  <Step title="Client Connects">
+    Publisher connects to load balancer at `rtmp://loadbalancer.com/LiveApp`
+  </Step>
+  
+  <Step title="Route to Origin">
+    Load balancer routes to an available origin node based on current load
+  </Step>
+  
+  <Step title="Stream Processing">
+    Origin node:
+    - Accepts the stream
+    - Writes metadata to MongoDB
+    - Performs transcoding (if enabled)
+    - Generates HLS/DASH segments
+  </Step>
+  
+  <Step title="Node Registration">
+    Stream location registered in cluster store for edge nodes to discover
+  </Step>
+</Steps>
+
+### Playback Flow
+
+<Steps>
+  <Step title="Viewer Request">
+    Player requests stream from load balancer
+  </Step>
+  
+  <Step title="Route to Edge">
+    Load balancer directs to an edge node
+  </Step>
+  
+  <Step title="Stream Discovery">
+    Edge node queries cluster store to find which origin has the stream
+  </Step>
+  
+  <Step title="Content Delivery">
+    Edge fetches and serves content to viewer
+  </Step>
+</Steps>
+
+## Monitoring the Cluster
+
+### REST API
+
+Get cluster information:
+
+<CodeGroup>
+```bash List Nodes
+curl "http://localhost:5080/LiveApp/rest/v2/cluster/nodes"
+```
+
+```json Response
+[
+  {
+    "id": "origin-1",
+    "ip": "192.168.1.10",
+    "status": "alive",
+    "cpu": "45.2%",
+    "memory": "8192/16384 MB",
+    "lastUpdateTime": 1709566230000
+  },
+  {
+    "id": "edge-1",  
+    "ip": "192.168.1.20",
+    "status": "alive",
+    "cpu": "22.1%",
+    "memory": "4096/8192 MB",
+    "lastUpdateTime": 1709566232000
+  }
+]
+```
+</CodeGroup>
+
+### Web Dashboard
+
+Access the cluster dashboard:
+
+1. Navigate to **http://your-server:5080**
+2. Log in to the admin panel
+3. Go to **Cluster** section
+4. View node status, load, and stream distribution
+
+### Metrics to Monitor
+
+| Metric | Description | Threshold |
+|--------|-------------|----------|
+| Node Status | alive/dead | Alert if any node is dead |
+| CPU Usage | Per-node CPU utilization | Alert if >80% |
+| Memory Usage | RAM consumption | Alert if >85% |
+| Active Streams | Streams per node | Balance across nodes |
+| DB Query Time | MongoDB response time | Alert if >100ms |
+
+## Scaling Strategies
+
+### Vertical Scaling (Single Node)
+
+Increase server resources:
+- Add more CPU cores for transcoding
+- Increase RAM for buffering
+- Use faster storage (SSD/NVMe)
+- Add GPU for hardware encoding
+
+**Limits:** Single server can handle ~500-1000 streams depending on configuration
+
+### Horizontal Scaling (Cluster)
+
+Add more nodes:
+
+<Steps>
+  <Step title="Deploy New Node">
+    Install AMS on a new server
+  </Step>
+  
+  <Step title="Configure as Origin/Edge">
+    Set appropriate mode and cluster settings
+  </Step>
+  
+  <Step title="Update Load Balancer">
+    Add new node to upstream pool
+  </Step>
+  
+  <Step title="Verify">
+    Confirm node appears in cluster dashboard
+  </Step>
+</Steps>
+
+**Benefits:**
+- Near-linear scaling (2x nodes ≈ 2x capacity)
+- No downtime during expansion
+- Redundancy and failover
+
+## High Availability
+
+### Automatic Failover
+
+If an origin node fails:
+
+1. Node heartbeat stops
+2. After 20 seconds, cluster marks node as **dead**
+3. Load balancer stops routing to failed node
+4. Existing streams on that node are lost
+5. New streams route to healthy nodes
+
+<Warning>
+**Active streams will drop** if an origin node fails. For mission-critical applications, implement stream redundancy by publishing to multiple origins.
+</Warning>
+
+### Database Redundancy
+
+Use MongoDB replica sets:
+
+```bash
+# Initialize replica set
+mongosh
+rs.initiate({
+  _id: "ams-cluster",
+  members: [
+    { _id: 0, host: "db1.example.com:27017" },
+    { _id: 1, host: "db2.example.com:27017" },  
+    { _id: 2, host: "db3.example.com:27017" }
+  ]
+})
+```
+
+Update AMS configuration:
+
+```properties
+db.host=db1.example.com:27017,db2.example.com:27017,db3.example.com:27017
+db.options=replicaSet=ams-cluster
+```
+
+## Performance Tuning
+
+### Origin Node Optimization
+
+```properties
+# Increase thread pool for encoding
+encoder.thread.count=4
+
+# Optimize segment duration
+hls.time=2
+hls.list.size=10
+
+# Enable GPU encoding
+encoder.gpu.enabled=true
+```
+
+### Edge Node Optimization
+
+```properties
+# Increase concurrent connections
+http.max.connections=2000
+
+# Cache settings
+cache.enabled=true
+cache.ttl=60
+
+# Reduce DB queries
+metadata.cache.enabled=true
+```
+
+### Load Balancer Optimization
+
+```nginx
+# Connection pooling
+upstream ams_origin {
+    keepalive 32;
+    # ...
+}
+
+# Caching
+proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=ams_cache:10m;
+proxy_cache ams_cache;
+proxy_cache_valid 200 60s;
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Node shows as 'dead' but server is running">
+    **Causes:**
+    - Network connectivity to MongoDB
+    - Firewall blocking cluster communication
+    - Time synchronization issues (NTP)
+    
+    **Solutions:**
+    - Check MongoDB connection: `mongo --host <db-ip>`
+    - Verify firewall allows port 27017
+    - Sync time across all nodes: `sudo ntpdate -u pool.ntp.org`
+  </Accordion>
+  
+  <Accordion title="Streams not appearing on edge nodes">
+    **Causes:**
+    - Edge can't reach origin nodes
+    - Incorrect origin node configuration
+    - MongoDB sync delay
+    
+    **Solutions:**
+    - Test connectivity: `curl http://<origin-ip>:5080/LiveApp/rest/v2/broadcasts/list/0/10`
+    - Verify `cluster.origin.nodes` setting on edge
+    - Check MongoDB replication lag
+  </Accordion>
+  
+  <Accordion title="Uneven load distribution">
+    **Issue:** All streams going to one node
+    
+    **Causes:**
+    - Load balancer algorithm (using `ip_hash` instead of `least_conn`)
+    - Node reporting incorrect capacity
+    
+    **Solutions:**
+    - Use `least_conn` or `least_time` in Nginx upstream
+    - Verify node metrics are updating correctly
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Separate Origin/Edge" icon="sitemap">
+    Don't mix roles. Use dedicated origin nodes for encoding and edge nodes for delivery.
+  </Card>
+  
+  <Card title="Monitor Database" icon="database">
+    MongoDB is critical. Use replica sets and monitor query performance closely.
+  </Card>
+  
+  <Card title="Plan for Failure" icon="shield">
+    Design for node failures. Use redundancy and monitoring with alerting.
+  </Card>
+  
+  <Card title="Load Test" icon="gauge-high">
+    Test your cluster under realistic load before production deployment.
+  </Card>
+</CardGroup>
+
+## Related Resources
+
+- [Installation Guide](/installation)
+- [MongoDB Configuration](/features/clustering)
+- [Load Balancer Setup](/operations/scaling)
+- [Monitoring & Analytics](/operations/analytics)

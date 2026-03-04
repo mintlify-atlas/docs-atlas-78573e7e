@@ -1,0 +1,189 @@
+---
+title: Subscriber
+description: The Subscriber model manages time-based token authentication for stream access control using TOTP (Time-based One-Time Password).
+---
+
+The Subscriber object provides secure, time-limited access control for publishing to or playing streams. It uses TOTP (Time-based One-Time Password) authentication to generate temporary access tokens.
+
+## Model Structure
+
+<ResponseField name="subscriberId" type="string" required>
+  The unique subscriber ID of the subscriber
+</ResponseField>
+
+<ResponseField name="subscriberName" type="string">
+  The display name of the subscriber
+</ResponseField>
+
+<ResponseField name="streamId" type="string" required>
+  The stream ID that this subscriber has access to
+</ResponseField>
+
+<ResponseField name="b32Secret" type="string" writeOnly>
+  Secret code of the subscriber in Base32 format. Used for TOTP token generation. Write-only field for security
+</ResponseField>
+
+<ResponseField name="type" type="string">
+  Type of subscriber access. Possible values:
+  - `play` - Subscriber can only play/watch the stream
+  - `publish` - Subscriber can publish to the stream (also includes play access for video conferencing)
+</ResponseField>
+
+<ResponseField name="currentConcurrentConnections" type="integer" default="0">
+  Current count of active concurrent connections for this subscriber
+</ResponseField>
+
+<ResponseField name="concurrentConnectionsLimit" type="integer" default="1">
+  Maximum number of concurrent connections allowed for this subscriber
+</ResponseField>
+
+<ResponseField name="blockedType" type="string">
+  Type of block applied to the subscriber. Possible values: `play`, `publish`, `publish_play`
+</ResponseField>
+
+<ResponseField name="blockedUntilUnitTimeStampMs" type="long" default="0">
+  Unix timestamp in milliseconds until which the subscriber is blocked. Value of `0` means not blocked
+</ResponseField>
+
+<ResponseField name="registeredNodeIp" type="string">
+  The IP address of the node where subscriber is registered (for cluster environments)
+</ResponseField>
+
+<ResponseField name="avgVideoBitrate" type="long">
+  The average video bitrate for this subscriber in bits per second
+</ResponseField>
+
+<ResponseField name="avgAudioBitrate" type="long">
+  The average audio bitrate for this subscriber in bits per second
+</ResponseField>
+
+<ResponseField name="totpExpiryPeriodSeconds" type="integer">
+  Custom TOTP expiry period in seconds for this subscriber. If null, falls back to global timeTokenPeriod setting
+</ResponseField>
+
+## Authentication Flow
+
+The Subscriber model enables time-based token authentication:
+
+1. **Create Subscriber**: Generate a subscriber with a secret (b32Secret)
+2. **Generate Token**: Use the secret to generate a TOTP token
+3. **Access Stream**: Client uses subscriberId and token to access the stream
+4. **Token Validation**: Server validates the token against the subscriber's secret
+5. **Access Granted**: If valid and within time window, access is granted
+
+## Access Types
+
+### Play Subscriber
+
+Subscribers with `type: "play"` can only watch/play the stream. This is suitable for viewer authentication.
+
+```json
+{
+  "subscriberId": "viewer-001",
+  "subscriberName": "John Doe",
+  "streamId": "test-stream-123",
+  "type": "play",
+  "concurrentConnectionsLimit": 2
+}
+```
+
+### Publish Subscriber
+
+Subscribers with `type: "publish"` can publish to the stream and also play it (useful for video conferencing).
+
+```json
+{
+  "subscriberId": "publisher-001",
+  "subscriberName": "Jane Smith",
+  "streamId": "conference-room-1",
+  "type": "publish",
+  "concurrentConnectionsLimit": 1
+}
+```
+
+## Blocking Subscribers
+
+You can temporarily or permanently block subscribers:
+
+```json
+{
+  "subscriberId": "blocked-user",
+  "streamId": "test-stream-123",
+  "type": "play",
+  "blockedType": "play",
+  "blockedUntilUnitTimeStampMs": 1709625600000
+}
+```
+
+Block types:
+- `play` - Block only playback access
+- `publish` - Block only publish access
+- `publish_play` - Block both publish and play access
+
+## Connection Limits
+
+Control concurrent connections per subscriber:
+
+```json
+{
+  "subscriberId": "limited-user",
+  "streamId": "test-stream-123",
+  "type": "play",
+  "currentConcurrentConnections": 1,
+  "concurrentConnectionsLimit": 3
+}
+```
+
+When `currentConcurrentConnections` reaches `concurrentConnectionsLimit`, new connection attempts are rejected.
+
+## Custom TOTP Expiry
+
+You can set a custom TOTP expiry period per subscriber:
+
+```json
+{
+  "subscriberId": "custom-expiry-user",
+  "streamId": "test-stream-123",
+  "type": "play",
+  "totpExpiryPeriodSeconds": 300
+}
+```
+
+If not set, the global server setting is used.
+
+## Example JSON
+
+```json
+{
+  "subscriberId": "sub-12345",
+  "subscriberName": "Alice Johnson",
+  "streamId": "live-stream-789",
+  "type": "play",
+  "currentConcurrentConnections": 0,
+  "concurrentConnectionsLimit": 5,
+  "blockedType": null,
+  "blockedUntilUnitTimeStampMs": 0,
+  "registeredNodeIp": "192.168.1.10",
+  "avgVideoBitrate": 2500000,
+  "avgAudioBitrate": 128000,
+  "totpExpiryPeriodSeconds": 60
+}
+```
+
+## Related API Endpoints
+
+- [Create Subscriber](/rest-api#create-subscriber) - `POST /v2/broadcasts/{id}/subscribers`
+- [Get Subscriber](/rest-api#get-subscriber) - `GET /v2/broadcasts/{id}/subscribers/{subscriberId}`
+- [Delete Subscriber](/rest-api#delete-subscriber) - `DELETE /v2/broadcasts/{id}/subscribers/{subscriberId}`
+- [List Subscribers](/rest-api#list-subscribers) - `GET /v2/broadcasts/{id}/subscribers/list/{offset}/{size}`
+- [Block Subscriber](/rest-api#block-subscriber) - `PUT /v2/broadcasts/{id}/subscribers/{subscriberId}/block`
+- [Unblock Subscriber](/rest-api#unblock-subscriber) - `PUT /v2/broadcasts/{id}/subscribers/{subscriberId}/unblock`
+
+## Security Considerations
+
+- The `b32Secret` field is write-only and never returned in GET requests
+- TOTP tokens are time-limited and expire based on `totpExpiryPeriodSeconds`
+- Store subscriber secrets securely on the client side
+- Use HTTPS for all API requests to protect tokens in transit
+- Implement rate limiting to prevent token brute-force attacks
+- Monitor `currentConcurrentConnections` to detect account sharing

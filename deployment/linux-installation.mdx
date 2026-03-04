@@ -1,0 +1,446 @@
+---
+title: "Linux Installation"
+description: "Complete guide to installing Ant Media Server on Linux systems including Ubuntu, Debian, CentOS, Rocky Linux, and AlmaLinux"
+---
+
+## Overview
+
+Ant Media Server can be installed on various Linux distributions including Ubuntu, Debian, CentOS, Rocky Linux, and AlmaLinux. This guide covers the complete installation process, system requirements, and post-installation configuration.
+
+## System Requirements
+
+### Minimum Hardware Requirements
+
+- **CPU**: 2 cores (4+ cores recommended for production)
+- **RAM**: 4GB minimum (8GB+ recommended for production)
+- **Storage**: 20GB minimum free disk space
+- **Network**: Public IP address with required ports open
+
+### Software Requirements
+
+- **Operating Systems**:
+  - Ubuntu 20.04 LTS or later
+  - Debian 10 or later
+  - CentOS 8 or later
+  - Rocky Linux 8 or 9
+  - AlmaLinux 8 or 9
+
+- **Java**: OpenJDK 17 (installed automatically)
+- **Required packages**: jq, dnsutils/bind-utils, iptables
+
+### Network Requirements
+
+The following ports must be open in your firewall:
+
+| Port | Protocol | Purpose |
+|------|----------|----------|
+| 5080 | TCP | HTTP (Web Panel, REST API) |
+| 5443 | TCP | HTTPS (Web Panel, REST API) |
+| 1935 | TCP | RTMP |
+| 8443 | TCP | RTMPS (if SSL enabled) |
+| 5000-65000 | UDP | WebRTC (media streams) |
+
+## Installation Steps
+
+<Steps>
+  <Step title="Download the Installation Script">
+    Download the latest Ant Media Server installation script from the official repository:
+
+    ```bash
+    wget https://raw.githubusercontent.com/ant-media/Scripts/master/install_ant-media-server.sh
+    chmod +x install_ant-media-server.sh
+    ```
+  </Step>
+
+  <Step title="Run the Installation">
+    Execute the installation script with root privileges:
+
+    ```bash
+    sudo ./install_ant-media-server.sh
+    ```
+
+    The script will:
+    - Install OpenJDK 17 if not already installed
+    - Download the latest Ant Media Server package
+    - Extract and configure the server
+    - Create the `antmedia` system user and group
+    - Set up systemd service
+    - Configure necessary permissions
+  </Step>
+
+  <Step title="Verify Installation">
+    Check if the Ant Media Server service is running:
+
+    ```bash
+    sudo systemctl status antmedia
+    ```
+
+    You should see output indicating the service is active and running.
+  </Step>
+
+  <Step title="Access the Web Panel">
+    Open your browser and navigate to:
+
+    ```
+    http://YOUR_SERVER_IP:5080
+    ```
+
+    You should see the Ant Media Server dashboard. On first access, you'll be prompted to create an admin account.
+  </Step>
+</Steps>
+
+## Default Installation Directory
+
+Ant Media Server is installed to:
+
+```
+/usr/local/antmedia
+```
+
+### Directory Structure
+
+```
+/usr/local/antmedia/
+├── conf/              # Configuration files
+├── webapps/           # Applications (LiveApp, WebRTCAppEE)
+├── log/               # Log files (symlink to /var/log/antmedia)
+├── start.sh           # Manual start script
+├── shutdown.sh        # Stop script
+├── enable_ssl.sh      # SSL configuration script
+└── change_server_mode.sh  # Cluster/standalone mode switch
+```
+
+## Service Management
+
+Ant Media Server runs as a systemd service named `antmedia`.
+
+### Start the Service
+
+```bash
+sudo systemctl start antmedia
+```
+
+### Stop the Service
+
+```bash
+sudo systemctl stop antmedia
+```
+
+### Restart the Service
+
+```bash
+sudo systemctl restart antmedia
+```
+
+### Check Service Status
+
+```bash
+sudo systemctl status antmedia
+```
+
+### Enable Auto-start on Boot
+
+```bash
+sudo systemctl enable antmedia
+```
+
+### View Logs
+
+View real-time logs:
+
+```bash
+sudo journalctl -u antmedia -f
+```
+
+View application logs:
+
+```bash
+tail -f /var/log/antmedia/antmedia-error.log
+```
+
+## Systemd Service Configuration
+
+The service file is located at `/lib/systemd/system/antmedia.service`.
+
+<Note>
+Key service configuration details:
+- **User/Group**: antmedia
+- **Working Directory**: /usr/local/antmedia
+- **File Descriptor Limit**: 65536-524288
+- **Tasks Max**: 64000
+- **Restart Policy**: on-failure with 5s delay
+- **Java Home**: /usr/lib/jvm/java-17-openjdk-amd64
+</Note>
+
+## Firewall Configuration
+
+### Ubuntu/Debian (UFW)
+
+```bash
+sudo ufw allow 5080/tcp
+sudo ufw allow 5443/tcp
+sudo ufw allow 1935/tcp
+sudo ufw allow 5000:65000/udp
+sudo ufw reload
+```
+
+### CentOS/Rocky/AlmaLinux (firewalld)
+
+```bash
+sudo firewall-cmd --permanent --add-port=5080/tcp
+sudo firewall-cmd --permanent --add-port=5443/tcp
+sudo firewall-cmd --permanent --add-port=1935/tcp
+sudo firewall-cmd --permanent --add-port=5000-65000/udp
+sudo firewall-cmd --reload
+```
+
+### iptables (Manual Configuration)
+
+If you're using iptables directly:
+
+```bash
+sudo iptables -A INPUT -p tcp --dport 5080 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 5443 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 1935 -j ACCEPT
+sudo iptables -A INPUT -p udp --dport 5000:65000 -j ACCEPT
+sudo iptables-save | sudo tee /etc/iptables/rules.v4
+```
+
+## Configuration Files
+
+### Main Server Configuration
+
+**Location**: `/usr/local/antmedia/conf/red5.properties`
+
+Key configuration parameters:
+
+```properties
+# Server settings
+server.name=
+server.licence_key=
+
+# HTTP/HTTPS ports
+http.host=0.0.0.0
+http.port=5080
+https.port=5443
+
+# RTMP settings
+rtmp.host=0.0.0.0
+rtmp.port=1935
+
+# Resource limits
+server.cpu_limit=75
+server.memory_limit_percentage=75
+
+# Logging
+logLevel=INFO
+nativeLogLevel=ERROR
+
+# Cluster mode
+clusterdb.host=localhost
+clusterdb.user=
+clusterdb.password=
+```
+
+### Application Configuration
+
+**Location**: `/usr/local/antmedia/webapps/{APP_NAME}/WEB-INF/red5-web.properties`
+
+Each application (LiveApp, WebRTCAppEE) has its own configuration file for app-specific settings.
+
+## JVM Memory Configuration
+
+By default, Ant Media Server uses `-Xms1g` for initial heap size. To customize memory settings:
+
+### Edit the Service File
+
+```bash
+sudo systemctl edit antmedia
+```
+
+Add the following override:
+
+```ini
+[Service]
+Environment="JVM_MEMORY_OPTIONS=-Xms2g -Xmx4g"
+```
+
+Reload and restart:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart antmedia
+```
+
+### Using start.sh (Manual Mode)
+
+If running manually with start.sh:
+
+```bash
+cd /usr/local/antmedia
+./start.sh -j "-Xms2g -Xmx4g"
+```
+
+## Server Configuration Options
+
+The `start.sh` script supports various configuration options:
+
+```bash
+./start.sh [OPTIONS]
+
+Options:
+  -g true/false              Use global (public) IP for network communication
+  -s true/false              Use public IP as server name
+  -m standalone/cluster      Server mode (standalone or cluster)
+  -h <connection_string>     MongoDB/Redis connection string
+  -l <license_key>           License key for Enterprise Edition
+  -a <turn_url>              TURN/STUN server URL (e.g., stun:stun.l.google.com:19302)
+  -n <turn_username>         TURN server username
+  -w <turn_password>         TURN server password
+  -k <kafka_url>             Kafka broker URL (e.g., localhost:9092)
+  -j "<jvm_options>"          JVM memory options (e.g., "-Xms2g -Xmx4g")
+  -c <percentage>            CPU limit percentage (default: 75)
+  -e <percentage>            Memory limit percentage (default: 75)
+```
+
+### Example: Configure Public IP
+
+```bash
+./start.sh -s true
+```
+
+### Example: Cluster Mode with MongoDB
+
+```bash
+./start.sh -m cluster -h "mongodb://username:password@mongodb-host:27017/antmedia"
+```
+
+## Post-Installation Tasks
+
+<Steps>
+  <Step title="Configure SSL/TLS">
+    For production environments, enable SSL. See the [SSL Setup](/deployment/ssl-setup) guide.
+  </Step>
+
+  <Step title="Set Up License Key (Enterprise)">
+    If using Enterprise Edition, add your license key:
+
+    ```bash
+    sudo nano /usr/local/antmedia/conf/red5.properties
+    ```
+
+    Set:
+    ```properties
+    server.licence_key=YOUR_LICENSE_KEY
+    ```
+
+    Restart the service:
+    ```bash
+    sudo systemctl restart antmedia
+    ```
+  </Step>
+
+  <Step title="Configure Resource Limits">
+    Adjust CPU and memory limits based on your server capacity:
+
+    ```bash
+    sudo nano /usr/local/antmedia/conf/red5.properties
+    ```
+
+    Modify:
+    ```properties
+    server.cpu_limit=80
+    server.memory_limit_percentage=80
+    ```
+  </Step>
+
+  <Step title="Set Up Monitoring">
+    Configure log rotation and monitoring for production:
+
+    ```bash
+    # Check log directory
+    ls -lh /var/log/antmedia/
+    ```
+  </Step>
+</Steps>
+
+## Upgrading
+
+To upgrade to a newer version:
+
+```bash
+cd /usr/local/antmedia
+sudo ./upgrade.sh https://path-to-new-version.zip
+```
+
+<Warning>
+Always backup your configuration and database before upgrading:
+```bash
+sudo cp -r /usr/local/antmedia/conf /usr/local/antmedia/conf.backup
+```
+</Warning>
+
+## Uninstallation
+
+To completely remove Ant Media Server:
+
+```bash
+cd /usr/local/antmedia
+sudo ./uninstall.sh
+```
+
+This will:
+- Stop the antmedia service
+- Remove the systemd service file
+- Delete the installation directory
+- Remove the antmedia user and group
+
+## Troubleshooting
+
+### Service Won't Start
+
+Check the error logs:
+
+```bash
+sudo journalctl -u antmedia -n 50
+tail -100 /var/log/antmedia/antmedia-error.log
+```
+
+### Port Already in Use
+
+Find which process is using the port:
+
+```bash
+sudo lsof -i :5080
+```
+
+### Permission Issues
+
+Ensure proper ownership:
+
+```bash
+sudo chown -R antmedia:antmedia /usr/local/antmedia
+sudo chown -R antmedia:antmedia /var/log/antmedia
+```
+
+### Java Not Found
+
+Verify Java installation:
+
+```bash
+java -version
+which java
+```
+
+Set JAVA_HOME if needed:
+
+```bash
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+```
+
+## Next Steps
+
+- [Configure SSL/TLS](/deployment/ssl-setup)
+- [Deploy on Docker](/deployment/docker)
+- [Set up clustering for scalability](/features/clustering)
+- [Configure WebRTC settings](/streaming/webrtc)

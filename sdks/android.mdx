@@ -1,0 +1,442 @@
+---
+title: "Android SDK"
+description: "Native Android SDK for WebRTC streaming in mobile applications"
+---
+
+The Ant Media Server Android SDK enables ultra-low latency WebRTC streaming in native Android applications. Built with Java/Kotlin compatibility and optimized for mobile performance.
+
+## Installation
+
+### Gradle
+
+Add the dependency to your app's `build.gradle`:
+
+```gradle
+dependencies {
+    implementation 'io.antmedia:webrtc-android-framework:2.9.0'
+}
+```
+
+### Maven Repository
+
+Add the Ant Media Maven repository to your project's `build.gradle`:
+
+```gradle
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url 'https://jitpack.io' }
+    }
+}
+```
+
+### Permissions
+
+Add required permissions to your `AndroidManifest.xml`:
+
+```xml
+<uses-permission android:name="android.permission.CAMERA" />
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+<uses-permission android:name="android.permission.BLUETOOTH" />
+<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+<uses-feature android:name="android.hardware.camera" />
+<uses-feature android:name="android.hardware.camera.autofocus" />
+```
+
+## Basic Usage
+
+### Initialize the SDK
+
+<CodeGroup>
+
+```java Java
+import io.antmedia.webrtcandroidframework.IWebRTCClient;
+import io.antmedia.webrtcandroidframework.IWebRTCListener;
+import io.antmedia.webrtcandroidframework.WebRTCClient;
+
+public class MainActivity extends AppCompatActivity {
+    private WebRTCClient webRTCClient;
+    private String serverUrl = "wss://your-server:5443/WebRTCAppEE/websocket";
+    
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        
+        webRTCClient = new WebRTCClient(this, this);
+        webRTCClient.setWebRTCListener(createWebRTCListener());
+        webRTCClient.init(serverUrl, "streamId", "publish", "", null);
+    }
+    
+    private IWebRTCListener createWebRTCListener() {
+        return new IWebRTCListener() {
+            @Override
+            public void onPublishStarted(String streamId) {
+                Log.i("WebRTC", "Publishing started: " + streamId);
+            }
+            
+            @Override
+            public void onPublishFinished(String streamId) {
+                Log.i("WebRTC", "Publishing finished: " + streamId);
+            }
+            
+            @Override
+            public void onPlayStarted(String streamId) {
+                Log.i("WebRTC", "Playing started: " + streamId);
+            }
+            
+            @Override
+            public void onDisconnected(String streamId) {
+                Log.i("WebRTC", "Disconnected: " + streamId);
+            }
+        };
+    }
+}
+```
+
+```kotlin Kotlin
+import io.antmedia.webrtcandroidframework.IWebRTCClient
+import io.antmedia.webrtcandroidframework.IWebRTCListener
+import io.antmedia.webrtcandroidframework.WebRTCClient
+
+class MainActivity : AppCompatActivity() {
+    private lateinit var webRTCClient: WebRTCClient
+    private val serverUrl = "wss://your-server:5443/WebRTCAppEE/websocket"
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+        
+        webRTCClient = WebRTCClient(this, this)
+        webRTCClient.setWebRTCListener(createWebRTCListener())
+        webRTCClient.init(serverUrl, "streamId", "publish", "", null)
+    }
+    
+    private fun createWebRTCListener() = object : IWebRTCListener {
+        override fun onPublishStarted(streamId: String) {
+            Log.i("WebRTC", "Publishing started: $streamId")
+        }
+        
+        override fun onPublishFinished(streamId: String) {
+            Log.i("WebRTC", "Publishing finished: $streamId")
+        }
+        
+        override fun onPlayStarted(streamId: String) {
+            Log.i("WebRTC", "Playing started: $streamId")
+        }
+        
+        override fun onDisconnected(streamId: String) {
+            Log.i("WebRTC", "Disconnected: $streamId")
+        }
+    }
+}
+```
+
+</CodeGroup>
+
+### Publishing a Stream
+
+Publish video from the device camera:
+
+<CodeGroup>
+
+```java Java
+// Start publishing
+String streamId = "myStream123";
+webRTCClient.publish(streamId);
+
+// Start publishing with token
+String token = "your-publish-token";
+webRTCClient.publish(streamId, token);
+
+// Stop publishing
+webRTCClient.stop(streamId);
+```
+
+```kotlin Kotlin
+// Start publishing
+val streamId = "myStream123"
+webRTCClient.publish(streamId)
+
+// Start publishing with token
+val token = "your-publish-token"
+webRTCClient.publish(streamId, token)
+
+// Stop publishing
+webRTCClient.stop(streamId)
+```
+
+</CodeGroup>
+
+### Playing a Stream
+
+Play an existing stream:
+
+<CodeGroup>
+
+```java Java
+// Play a stream
+String streamId = "myStream123";
+webRTCClient.play(streamId);
+
+// Play with token
+String token = "your-play-token";
+webRTCClient.play(streamId, token);
+
+// Stop playing
+webRTCClient.stop(streamId);
+```
+
+```kotlin Kotlin
+// Play a stream
+val streamId = "myStream123"
+webRTCClient.play(streamId)
+
+// Play with token
+val token = "your-play-token"
+webRTCClient.play(streamId, token)
+
+// Stop playing
+webRTCClient.stop(streamId)
+```
+
+</CodeGroup>
+
+## Video Rendering
+
+Add SurfaceViewRenderer to your layout:
+
+```xml
+<org.webrtc.SurfaceViewRenderer
+    android:id="@+id/localVideoView"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent" />
+
+<org.webrtc.SurfaceViewRenderer
+    android:id="@+id/remoteVideoView"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent" />
+```
+
+Set video renderers in code:
+
+<CodeGroup>
+
+```java Java
+SurfaceViewRenderer localRenderer = findViewById(R.id.localVideoView);
+SurfaceViewRenderer remoteRenderer = findViewById(R.id.remoteVideoView);
+
+webRTCClient.setVideoRenderers(localRenderer, remoteRenderer);
+```
+
+```kotlin Kotlin
+val localRenderer: SurfaceViewRenderer = findViewById(R.id.localVideoView)
+val remoteRenderer: SurfaceViewRenderer = findViewById(R.id.remoteVideoView)
+
+webRTCClient.setVideoRenderers(localRenderer, remoteRenderer)
+```
+
+</CodeGroup>
+
+## Conference Room
+
+Join a multi-party conference room:
+
+<CodeGroup>
+
+```java Java
+String roomId = "conference-room-1";
+webRTCClient.joinRoom(roomId);
+
+// Leave room
+webRTCClient.leaveFromRoom(roomId);
+```
+
+```kotlin Kotlin
+val roomId = "conference-room-1"
+webRTCClient.joinRoom(roomId)
+
+// Leave room
+webRTCClient.leaveFromRoom(roomId)
+```
+
+</CodeGroup>
+
+## Camera Controls
+
+Switch between cameras and control video:
+
+<CodeGroup>
+
+```java Java
+// Switch between front and back camera
+webRTCClient.switchCamera();
+
+// Toggle video on/off
+webRTCClient.toggleVideo();
+
+// Toggle audio on/off
+webRTCClient.toggleAudio();
+
+// Enable/disable video
+webRTCClient.setVideoEnable(true);
+
+// Enable/disable audio
+webRTCClient.setAudioEnable(true);
+```
+
+```kotlin Kotlin
+// Switch between front and back camera
+webRTCClient.switchCamera()
+
+// Toggle video on/off
+webRTCClient.toggleVideo()
+
+// Toggle audio on/off
+webRTCClient.toggleAudio()
+
+// Enable/disable video
+webRTCClient.setVideoEnable(true)
+
+// Enable/disable audio
+webRTCClient.setAudioEnable(true)
+```
+
+</CodeGroup>
+
+## Configuration Options
+
+### Video Resolution
+
+Set custom video resolution:
+
+<CodeGroup>
+
+```java Java
+webRTCClient.setVideoResolution(1280, 720);
+```
+
+```kotlin Kotlin
+webRTCClient.setVideoResolution(1280, 720)
+```
+
+</CodeGroup>
+
+### Data Channels
+
+Send real-time data:
+
+<CodeGroup>
+
+```java Java
+// Send data
+String message = "Hello viewers!";
+webRTCClient.sendMessageViaDataChannel(streamId, message);
+
+// Receive data in listener
+@Override
+public void onDataChannelMessage(String streamId, String message) {
+    Log.i("WebRTC", "Received: " + message);
+}
+```
+
+```kotlin Kotlin
+// Send data
+val message = "Hello viewers!"
+webRTCClient.sendMessageViaDataChannel(streamId, message)
+
+// Receive data in listener
+override fun onDataChannelMessage(streamId: String, message: String) {
+    Log.i("WebRTC", "Received: $message")
+}
+```
+
+</CodeGroup>
+
+## WebRTC Listener Events
+
+Implement all listener methods:
+
+```java
+public interface IWebRTCListener {
+    void onPublishStarted(String streamId);
+    void onPublishFinished(String streamId);
+    void onPlayStarted(String streamId);
+    void onPlayFinished(String streamId);
+    void onDisconnected(String streamId);
+    void onError(String description, String streamId);
+    void onSignalChannelClosed(String streamId);
+    void onBitrateMeasurement(String streamId, int targetBitrate, int videoBitrate, int audioBitrate);
+    void onIceConnected(String streamId);
+    void onIceDisconnected(String streamId);
+    void onTrackList(String[] tracks);
+    void onDataChannelMessage(String streamId, String message);
+    void onStreamInfoList(String streamId, ArrayList<StreamInfo> streamInfoList);
+}
+```
+
+## Runtime Permissions
+
+Request camera and microphone permissions:
+
+<CodeGroup>
+
+```java Java
+if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+    requestPermissions(
+        new String[]{
+            Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO
+        },
+        PERMISSION_REQUEST_CODE
+    );
+}
+```
+
+```kotlin Kotlin
+if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+    requestPermissions(
+        arrayOf(
+            Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO
+        ),
+        PERMISSION_REQUEST_CODE
+    )
+}
+```
+
+</CodeGroup>
+
+## Resources
+
+<Card title="Android SDK Repository" icon="github" href="https://github.com/ant-media/WebRTC-Android-SDK">
+  View source code, sample apps, and contribute on GitHub
+</Card>
+
+## Requirements
+
+- Android 5.0 (API level 21) or higher
+- Camera and microphone hardware
+- Internet connection
+- Ant Media Server with SSL/TLS configured
+
+<Note>
+  For production apps, make sure to handle runtime permissions properly and test on multiple Android versions and devices.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="iOS SDK" icon="apple" href="/sdks/ios">
+    Build for iOS with the native iOS SDK
+  </Card>
+  
+  <Card title="Authentication" icon="shield-halved" href="/security/authentication">
+    Secure streams with token authentication
+  </Card>
+</CardGroup>

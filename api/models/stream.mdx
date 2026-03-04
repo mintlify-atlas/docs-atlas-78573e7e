@@ -1,0 +1,183 @@
+---
+title: StreamInfo
+description: The StreamInfo model contains technical information about a stream's media properties in a cluster environment.
+---
+
+The StreamInfo object stores detailed technical information about a stream's audio and video characteristics. It's primarily used in cluster deployments to share stream metadata across nodes.
+
+## Model Structure
+
+<ResponseField name="streamId" type="string">
+  The unique identifier of the stream
+</ResponseField>
+
+<ResponseField name="host" type="string">
+  The hostname or IP address of the server hosting this stream
+</ResponseField>
+
+<ResponseField name="nodeGroup" type="string">
+  The node group this stream belongs to in a cluster environment
+</ResponseField>
+
+<ResponseField name="isGlobalHost" type="boolean">
+  Indicates whether this is a global host in the cluster
+</ResponseField>
+
+<ResponseField name="originPort" type="integer">
+  The port number of the origin server for this stream
+</ResponseField>
+
+## Video Properties
+
+<ResponseField name="videoEnabled" type="boolean">
+  Indicates whether video track is enabled for this stream
+</ResponseField>
+
+<ResponseField name="height" type="integer">
+  The height of the video in pixels
+</ResponseField>
+
+<ResponseField name="width" type="integer">
+  The width of the video in pixels
+</ResponseField>
+
+<ResponseField name="videoBitrate" type="integer">
+  The video bitrate in bits per second
+</ResponseField>
+
+<ResponseField name="videoRTimebase" type="integer">
+  The video rational timebase value used for timestamp calculations
+</ResponseField>
+
+<ResponseField name="videoCodec" type="string">
+  The video codec being used (e.g., VP8, H264, VP9)
+</ResponseField>
+
+## Audio Properties
+
+<ResponseField name="audioEnabled" type="boolean">
+  Indicates whether audio track is enabled for this stream
+</ResponseField>
+
+<ResponseField name="audioBitrate" type="integer">
+  The audio bitrate in bits per second
+</ResponseField>
+
+<ResponseField name="audioRTimebase" type="integer">
+  The audio rational timebase value used for timestamp calculations
+</ResponseField>
+
+## Data Channel
+
+<ResponseField name="dataChannelEnabled" type="boolean">
+  Indicates whether WebRTC data channel is enabled for this stream
+</ResponseField>
+
+## Use Cases
+
+The StreamInfo model is primarily used for:
+
+### Cluster Coordination
+
+In cluster deployments, StreamInfo helps edge nodes discover which origin node is handling a specific stream:
+
+```json
+{
+  "streamId": "webrtc-stream-123",
+  "host": "origin-node-1.example.com",
+  "nodeGroup": "us-east",
+  "isGlobalHost": false,
+  "originPort": 5080,
+  "videoEnabled": true,
+  "audioEnabled": true,
+  "dataChannelEnabled": true
+}
+```
+
+### Stream Capability Detection
+
+Applications can check StreamInfo to determine what media types are available:
+
+```json
+{
+  "streamId": "audio-only-stream",
+  "host": "server.example.com",
+  "videoEnabled": false,
+  "audioEnabled": true,
+  "audioBitrate": 128000,
+  "dataChannelEnabled": false
+}
+```
+
+### Adaptive Bitrate Planning
+
+StreamInfo provides the current stream characteristics for ABR ladder planning:
+
+```json
+{
+  "streamId": "live-stream-hd",
+  "videoEnabled": true,
+  "width": 1920,
+  "height": 1080,
+  "videoBitrate": 4000000,
+  "videoCodec": "H264",
+  "audioEnabled": true,
+  "audioBitrate": 128000
+}
+```
+
+## Example JSON
+
+```json
+{
+  "streamId": "conference-room-42",
+  "host": "origin-1.antmedia.io",
+  "nodeGroup": "production",
+  "isGlobalHost": true,
+  "originPort": 5080,
+  "videoEnabled": true,
+  "height": 720,
+  "width": 1280,
+  "videoBitrate": 2000000,
+  "videoRTimebase": 90000,
+  "videoCodec": "VP8",
+  "audioEnabled": true,
+  "audioBitrate": 64000,
+  "audioRTimebase": 48000,
+  "dataChannelEnabled": true
+}
+```
+
+## Video Codec Values
+
+The `videoCodec` field can contain:
+
+- `H264` - H.264/AVC codec
+- `VP8` - VP8 codec (WebRTC default)
+- `VP9` - VP9 codec
+- `H265` - H.265/HEVC codec (if supported)
+- `AV1` - AV1 codec (if supported)
+
+## Timebase Explanation
+
+The `videoRTimebase` and `audioRTimebase` fields represent the rational timebase used for timestamp calculations:
+
+- **Video Timebase**: Typically `90000` for most video codecs (90 kHz)
+- **Audio Timebase**: Typically equals the audio sample rate (e.g., `48000` for 48 kHz audio)
+
+These values are used internally for accurate timestamp synchronization.
+
+## Related API Endpoints
+
+- [Get Stream Info](/rest-api#get-stream-info) - `GET /v2/streams/{streamId}`
+- [List Stream Infos](/rest-api#list-stream-infos) - `GET /v2/streams/list/{offset}/{size}`
+
+## Difference from Broadcast Model
+
+While the [Broadcast](/api/models/broadcast) model contains comprehensive stream configuration and statistics, StreamInfo focuses specifically on:
+
+- **Technical media properties** (codecs, bitrates, resolutions)
+- **Cluster routing information** (host, node group, origin)
+- **Real-time capabilities** (enabled tracks)
+
+Use Broadcast for stream management and configuration, and StreamInfo for cluster coordination and media capability detection.

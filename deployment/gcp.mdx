@@ -1,0 +1,614 @@
+---
+title: "Google Cloud Platform Deployment"
+description: "Deploy Ant Media Server on Google Cloud Platform using Compute Engine, Marketplace, and managed instance groups for scalable streaming"
+---
+
+## Overview
+
+Ant Media Server can be deployed on Google Cloud Platform (GCP) using Compute Engine instances, GCP Marketplace for one-click deployment, or Managed Instance Groups (MIG) for auto-scaling capabilities.
+
+## Deployment Methods
+
+### GCP Marketplace (Recommended)
+
+Deploy Ant Media Server Enterprise Edition directly from GCP Marketplace:
+
+- **Enterprise Edition**: [GCP Marketplace Link](https://console.cloud.google.com/marketplace/product/antmedia-public/ant-media-server-enterprise-edition)
+
+<Note>
+Currently, only the Enterprise Edition is available on GCP Marketplace. Community Edition can be deployed manually on Compute Engine.
+</Note>
+
+### Manual Compute Engine Deployment
+
+Deploy on a Compute Engine VM instance with custom configuration.
+
+### Managed Instance Groups
+
+Automated scaling using MIG with load balancing for high-traffic scenarios.
+
+## Compute Engine Instance Requirements
+
+### Machine Types
+
+**Development/Testing**:
+- Machine Type: `e2-medium` or `n1-standard-2`
+- vCPUs: 2
+- Memory: 4 GB
+- Cost: ~$50-70/month
+
+**Production (Recommended)**:
+- Machine Type: `c2-standard-4` or `n2-standard-4`
+- vCPUs: 4
+- Memory: 8-16 GB
+- Network: Premium tier
+- Cost: ~$150-250/month
+
+**High-Performance Streaming**:
+- Machine Type: `c2-standard-8` or `c2-standard-16`
+- vCPUs: 8-16
+- Memory: 16-32 GB
+- Network: Premium tier, 10+ Gbps
+- SSD persistent disk
+- Cost: ~$300-600/month
+
+### Operating System Images
+
+**Supported Images**:
+- Ubuntu 20.04 LTS
+- Ubuntu 22.04 LTS
+- Debian 11 (Bullseye)
+- Debian 12 (Bookworm)
+- CentOS Stream 8/9
+- Red Hat Enterprise Linux 8/9
+
+<Note>
+Ubuntu 20.04 LTS or 22.04 LTS from ubuntu-os-cloud project is recommended.
+</Note>
+
+### Boot Disk
+
+- **Size**: 30 GB minimum (50 GB recommended)
+- **Type**: SSD persistent disk (pd-ssd) for production
+- **Additional Disk**: 100-500 GB for stream recordings
+
+## Quick Start: GCP Marketplace Deployment
+
+<Steps>
+  <Step title="Access GCP Marketplace">
+    1. Log into Google Cloud Console (https://console.cloud.google.com)
+    2. Navigate to **Marketplace**
+    3. Search for "Ant Media Server Enterprise Edition"
+    4. Click on the listing
+  </Step>
+
+  <Step title="Launch Instance">
+    Click **Launch** and configure:
+
+    - **Deployment name**: antmedia-server
+    - **Zone**: Select region (e.g., us-central1-a)
+    - **Machine type**: c2-standard-4 or larger
+    - **Boot disk**: 30 GB SSD persistent disk
+  </Step>
+
+  <Step title="Configure Firewall">
+    Enable firewall rules:
+
+    - ✓ Allow HTTP traffic (port 5080)
+    - ✓ Allow HTTPS traffic (port 5443)
+    - Additional ports configured automatically
+  </Step>
+
+  <Step title="Deploy">
+    1. Review configuration
+    2. Click **Deploy**
+    3. Wait for deployment (5-10 minutes)
+    4. Note the external IP address
+  </Step>
+
+  <Step title="Access Web Panel">
+    Open browser to `http://EXTERNAL_IP:5080`
+
+    Create admin account on first access
+  </Step>
+</Steps>
+
+## Manual Compute Engine Deployment
+
+<Steps>
+  <Step title="Create VM Instance">
+    Using gcloud CLI:
+
+    ```bash
+    # Set project
+    gcloud config set project YOUR_PROJECT_ID
+
+    # Create instance
+    gcloud compute instances create antmedia-server \
+      --zone=us-central1-a \
+      --machine-type=c2-standard-4 \
+      --image-family=ubuntu-2204-lts \
+      --image-project=ubuntu-os-cloud \
+      --boot-disk-size=30GB \
+      --boot-disk-type=pd-ssd \
+      --tags=antmedia-server \
+      --metadata=startup-script='#!/bin/bash
+        wget https://raw.githubusercontent.com/ant-media/Scripts/master/install_ant-media-server.sh
+        chmod +x install_ant-media-server.sh
+        ./install_ant-media-server.sh'
+    ```
+  </Step>
+
+  <Step title="Create Firewall Rules">
+    Configure firewall (see section below):
+
+    ```bash
+    gcloud compute firewall-rules create antmedia-allow-http \
+      --direction=INGRESS \
+      --priority=1000 \
+      --network=default \
+      --action=ALLOW \
+      --rules=tcp:5080,tcp:5443 \
+      --source-ranges=0.0.0.0/0 \
+      --target-tags=antmedia-server
+    ```
+  </Step>
+
+  <Step title="Connect to Instance">
+    SSH into the instance:
+
+    ```bash
+    gcloud compute ssh antmedia-server --zone=us-central1-a
+    ```
+  </Step>
+
+  <Step title="Verify Installation">
+    Check service status:
+
+    ```bash
+    sudo systemctl status antmedia
+    ```
+
+    Get external IP:
+    ```bash
+    gcloud compute instances describe antmedia-server \
+      --zone=us-central1-a \
+      --format='get(networkInterfaces[0].accessConfigs[0].natIP)'
+    ```
+  </Step>
+</Steps>
+
+## Firewall Configuration
+
+### Required Firewall Rules
+
+Create firewall rules for all required ports:
+
+| Rule Name | Direction | Priority | Ports | Protocol | Source | Target Tags |
+|-----------|-----------|----------|-------|----------|--------|-------------|
+| antmedia-allow-http | Ingress | 1000 | 5080, 5443 | TCP | 0.0.0.0/0 | antmedia-server |
+| antmedia-allow-rtmp | Ingress | 1001 | 1935, 8443 | TCP | 0.0.0.0/0 | antmedia-server |
+| antmedia-allow-webrtc | Ingress | 1002 | 5000-65000 | UDP | 0.0.0.0/0 | antmedia-server |
+| antmedia-allow-ssh | Ingress | 1003 | 22 | TCP | YOUR_IP/32 | antmedia-server |
+
+### Using gcloud CLI
+
+```bash
+# HTTP/HTTPS
+gcloud compute firewall-rules create antmedia-allow-http \
+  --direction=INGRESS \
+  --priority=1000 \
+  --network=default \
+  --action=ALLOW \
+  --rules=tcp:5080,tcp:5443 \
+  --source-ranges=0.0.0.0/0 \
+  --target-tags=antmedia-server
+
+# RTMP/RTMPS
+gcloud compute firewall-rules create antmedia-allow-rtmp \
+  --direction=INGRESS \
+  --priority=1001 \
+  --network=default \
+  --action=ALLOW \
+  --rules=tcp:1935,tcp:8443 \
+  --source-ranges=0.0.0.0/0 \
+  --target-tags=antmedia-server
+
+# WebRTC UDP
+gcloud compute firewall-rules create antmedia-allow-webrtc \
+  --direction=INGRESS \
+  --priority=1002 \
+  --network=default \
+  --action=ALLOW \
+  --rules=udp:5000-65000 \
+  --source-ranges=0.0.0.0/0 \
+  --target-tags=antmedia-server
+
+# SSH (restrict to your IP)
+gcloud compute firewall-rules create antmedia-allow-ssh \
+  --direction=INGRESS \
+  --priority=1003 \
+  --network=default \
+  --action=ALLOW \
+  --rules=tcp:22 \
+  --source-ranges=YOUR_IP/32 \
+  --target-tags=antmedia-server
+```
+
+<Warning>
+Restrict SSH access (port 22) to specific IP addresses for security. Replace YOUR_IP with your actual IP address.
+</Warning>
+
+## Static External IP
+
+### Reserve Static IP
+
+```bash
+# Reserve static IP
+gcloud compute addresses create antmedia-static-ip \
+  --region=us-central1
+
+# Get the IP address
+gcloud compute addresses describe antmedia-static-ip \
+  --region=us-central1 \
+  --format='get(address)'
+
+# Assign to instance
+gcloud compute instances delete-access-config antmedia-server \
+  --zone=us-central1-a \
+  --access-config-name="external-nat"
+
+gcloud compute instances add-access-config antmedia-server \
+  --zone=us-central1-a \
+  --access-config-name="external-nat" \
+  --address=STATIC_IP_ADDRESS
+```
+
+### Configure Server Name
+
+```bash
+sudo nano /usr/local/antmedia/conf/red5.properties
+```
+
+Set your static IP or domain:
+```properties
+server.name=YOUR_STATIC_IP_OR_DOMAIN
+```
+
+Restart:
+```bash
+sudo systemctl restart antmedia
+```
+
+## Managed Instance Groups (Auto-Scaling)
+
+### Create Instance Template
+
+```bash
+# Create startup script
+cat > startup.sh <<'EOF'
+#!/bin/bash
+wget https://raw.githubusercontent.com/ant-media/Scripts/master/install_ant-media-server.sh
+chmod +x install_ant-media-server.sh
+./install_ant-media-server.sh
+EOF
+
+# Create instance template
+gcloud compute instance-templates create antmedia-template \
+  --machine-type=c2-standard-4 \
+  --image-family=ubuntu-2204-lts \
+  --image-project=ubuntu-os-cloud \
+  --boot-disk-size=30GB \
+  --boot-disk-type=pd-ssd \
+  --tags=antmedia-server \
+  --metadata-from-file=startup-script=startup.sh
+```
+
+### Create Managed Instance Group
+
+```bash
+# Create MIG
+gcloud compute instance-groups managed create antmedia-mig \
+  --base-instance-name=antmedia \
+  --size=2 \
+  --template=antmedia-template \
+  --zone=us-central1-a
+
+# Configure autoscaling
+gcloud compute instance-groups managed set-autoscaling antmedia-mig \
+  --zone=us-central1-a \
+  --max-num-replicas=10 \
+  --min-num-replicas=2 \
+  --target-cpu-utilization=0.75 \
+  --cool-down-period=90
+```
+
+### Create Load Balancer
+
+```bash
+# Create health check
+gcloud compute health-checks create http antmedia-health-check \
+  --port=5080 \
+  --request-path=/ \
+  --check-interval=30s \
+  --timeout=10s \
+  --unhealthy-threshold=3 \
+  --healthy-threshold=2
+
+# Create backend service
+gcloud compute backend-services create antmedia-backend \
+  --protocol=HTTP \
+  --health-checks=antmedia-health-check \
+  --global
+
+# Add instance group to backend
+gcloud compute backend-services add-backend antmedia-backend \
+  --instance-group=antmedia-mig \
+  --instance-group-zone=us-central1-a \
+  --global
+
+# Create URL map
+gcloud compute url-maps create antmedia-lb \
+  --default-service=antmedia-backend
+
+# Create HTTP proxy
+gcloud compute target-http-proxies create antmedia-http-proxy \
+  --url-map=antmedia-lb
+
+# Create forwarding rule
+gcloud compute forwarding-rules create antmedia-forwarding-rule \
+  --global \
+  --target-http-proxy=antmedia-http-proxy \
+  --ports=80
+```
+
+## Persistent Disk Configuration
+
+### Create and Attach Disk
+
+```bash
+# Create persistent disk
+gcloud compute disks create antmedia-data-disk \
+  --size=100GB \
+  --type=pd-ssd \
+  --zone=us-central1-a
+
+# Attach to instance
+gcloud compute instances attach-disk antmedia-server \
+  --disk=antmedia-data-disk \
+  --zone=us-central1-a
+```
+
+### Mount the Disk
+
+```bash
+# Inside the VM
+sudo lsblk
+sudo mkfs.ext4 -m 0 -F -E lazy_itable_init=0,lazy_journal_init=0,discard /dev/sdb
+sudo mkdir -p /mnt/streams
+sudo mount -o discard,defaults /dev/sdb /mnt/streams
+sudo chmod a+w /mnt/streams
+
+# Add to fstab
+echo UUID=`sudo blkid -s UUID -o value /dev/sdb` /mnt/streams ext4 discard,defaults,nofail 0 2 | sudo tee -a /etc/fstab
+
+# Change ownership
+sudo chown -R antmedia:antmedia /mnt/streams
+```
+
+## Cloud Storage Integration
+
+### Create Storage Bucket
+
+```bash
+# Create bucket
+gsutil mb -l us-central1 gs://antmedia-recordings/
+
+# Set lifecycle policy (optional - auto-delete old files)
+cat > lifecycle.json <<EOF
+{
+  "lifecycle": {
+    "rule": [
+      {
+        "action": {"type": "Delete"},
+        "condition": {"age": 30}
+      }
+    ]
+  }
+}
+EOF
+
+gsutil lifecycle set lifecycle.json gs://antmedia-recordings/
+```
+
+### Configure Service Account
+
+```bash
+# Create service account
+gcloud iam service-accounts create antmedia-storage \
+  --display-name="Ant Media Storage Access"
+
+# Grant storage access
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+  --member="serviceAccount:antmedia-storage@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/storage.objectAdmin"
+
+# Create key
+gcloud iam service-accounts keys create antmedia-key.json \
+  --iam-account=antmedia-storage@YOUR_PROJECT_ID.iam.gserviceaccount.com
+```
+
+## Database Configuration (Enterprise)
+
+### Cloud Firestore (MongoDB Alternative)
+
+For serverless NoSQL database option, use Cloud Firestore in native mode.
+
+### MongoDB Atlas on GCP
+
+Deploy MongoDB Atlas cluster on GCP for managed MongoDB:
+
+1. Create MongoDB Atlas account
+2. Deploy cluster in same GCP region
+3. Configure network peering or IP whitelist
+4. Get connection string
+
+### Configure Cluster Mode
+
+```bash
+sudo /usr/local/antmedia/change_server_mode.sh cluster "mongodb://username:password@mongodb-host:27017/antmedia"
+```
+
+### Cloud SQL (Alternative)
+
+For managed relational database needs (not for Ant Media Server primary DB, but for custom integrations).
+
+## SSL/TLS Configuration
+
+### Using Let's Encrypt
+
+```bash
+# With domain name
+sudo /usr/local/antmedia/enable_ssl.sh -d stream.yourdomain.com -e admin@yourdomain.com
+```
+
+### Using Google-Managed SSL Certificates
+
+For load balancer SSL termination:
+
+```bash
+# Create SSL certificate
+gcloud compute ssl-certificates create antmedia-ssl \
+  --domains=stream.yourdomain.com
+
+# Create HTTPS proxy
+gcloud compute target-https-proxies create antmedia-https-proxy \
+  --url-map=antmedia-lb \
+  --ssl-certificates=antmedia-ssl
+
+# Create forwarding rule
+gcloud compute forwarding-rules create antmedia-https-forwarding \
+  --global \
+  --target-https-proxy=antmedia-https-proxy \
+  --ports=443
+```
+
+## Monitoring with Cloud Monitoring
+
+### Enable Cloud Monitoring Agent
+
+```bash
+# Inside VM
+curl -sSO https://dl.google.com/cloudagents/add-google-cloud-ops-agent-repo.sh
+sudo bash add-google-cloud-ops-agent-repo.sh --also-install
+```
+
+### Create Alert Policies
+
+```bash
+# High CPU alert
+gcloud alpha monitoring policies create \
+  --notification-channels=CHANNEL_ID \
+  --display-name="High CPU Usage" \
+  --condition-display-name="CPU > 80%" \
+  --condition-threshold-value=0.8 \
+  --condition-threshold-duration=300s \
+  --condition-filter='resource.type="gce_instance" AND metric.type="compute.googleapis.com/instance/cpu/utilization"'
+```
+
+### Custom Metrics
+
+Send custom Ant Media Server metrics to Cloud Monitoring using the API.
+
+## Backup and Disaster Recovery
+
+### Snapshot Schedule
+
+```bash
+# Create snapshot schedule
+gcloud compute resource-policies create snapshot-schedule antmedia-daily-backup \
+  --region=us-central1 \
+  --max-retention-days=7 \
+  --on-source-disk-delete=keep-auto-snapshots \
+  --daily-schedule \
+  --start-time=02:00
+
+# Attach schedule to disk
+gcloud compute disks add-resource-policies antmedia-server \
+  --zone=us-central1-a \
+  --resource-policies=antmedia-daily-backup
+```
+
+### Manual Snapshot
+
+```bash
+gcloud compute disks snapshot antmedia-server \
+  --zone=us-central1-a \
+  --snapshot-names=antmedia-snapshot-$(date +%Y%m%d)
+```
+
+### Multi-Region Deployment
+
+Deploy in multiple regions for disaster recovery:
+- Primary: us-central1
+- Backup: europe-west1
+- Use Cloud DNS for failover
+
+## Cost Optimization
+
+### Committed Use Discounts
+
+Purchase 1-year or 3-year committed use contracts for up to 57% discount.
+
+### Preemptible VMs
+
+For non-critical workloads (up to 80% discount):
+
+```bash
+gcloud compute instances create antmedia-preemptible \
+  --zone=us-central1-a \
+  --machine-type=c2-standard-4 \
+  --preemptible \
+  --image-family=ubuntu-2204-lts \
+  --image-project=ubuntu-os-cloud
+```
+
+### Custom Machine Types
+
+Optimize vCPU and memory ratio:
+
+```bash
+gcloud compute instances create antmedia-custom \
+  --zone=us-central1-a \
+  --custom-cpu=4 \
+  --custom-memory=12GB
+```
+
+## Troubleshooting
+
+### Instance Not Accessible
+
+1. Check firewall rules: `gcloud compute firewall-rules list`
+2. Verify instance is running: `gcloud compute instances list`
+3. Check serial port output: `gcloud compute instances get-serial-port-output antmedia-server --zone=us-central1-a`
+
+### Performance Issues
+
+1. Check Cloud Monitoring dashboards
+2. Verify machine type is appropriate
+3. Check disk performance metrics
+4. Review application logs: `gcloud compute ssh antmedia-server --zone=us-central1-a --command="sudo journalctl -u antmedia -n 100"`
+
+### WebRTC Connection Issues
+
+1. Verify UDP firewall rules
+2. Check external IP configuration
+3. Ensure server.name is set correctly
+4. Test STUN/TURN connectivity
+
+## Next Steps
+
+- [Configure SSL/TLS](/deployment/ssl-setup)
+- [Set up clustering](/features/clustering)
+- [Configure Cloud CDN](/operations/scaling)
+- [Implement monitoring](/operations/monitoring)

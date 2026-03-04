@@ -1,0 +1,696 @@
+---
+title: "HLS Streaming"
+description: "HTTP Live Streaming protocol for adaptive bitrate delivery to browsers and mobile devices"
+---
+
+## Overview
+
+HLS (HTTP Live Streaming) is Apple's adaptive bitrate streaming protocol that delivers video over HTTP. It's widely supported across browsers, mobile devices, and smart TVs, making it the de facto standard for VOD and live streaming.
+
+### Key Benefits
+
+- **Universal compatibility**: Works on iOS, Android, browsers, smart TVs
+- **Adaptive bitrate**: Automatically adjusts quality based on bandwidth
+- **HTTP-based**: Uses standard web servers, CDN-friendly
+- **Scalable**: Easily distributed via CDNs
+- **DRM support**: FairPlay Streaming, AES encryption
+- **Codec support**: H.264, H.265/HEVC, AAC, AC3, MP3
+
+## Publishing for HLS
+
+Ant Media Server automatically converts incoming streams to HLS. Publish using any supported protocol:
+
+<CodeGroup>
+
+```bash RTMP to HLS
+# Publish via RTMP
+ffmpeg -re -i input.mp4 \
+  -c:v libx264 -preset veryfast -b:v 2500k \
+  -c:a aac -b:a 128k \
+  -f flv rtmp://your-server.com/WebRTCAppEE/stream123
+
+# HLS automatically available at:
+# https://your-server.com:5443/WebRTCAppEE/streams/stream123.m3u8
+```
+
+```javascript WebRTC to HLS
+// Publish via WebRTC
+const webRTCAdaptor = new WebRTCAdaptor({
+    websocket_url: "wss://your-server.com:5443/WebRTCAppEE/websocket",
+    mediaConstraints: { video: true, audio: true },
+    callback: (info) => {
+        if (info === "initialized") {
+            webRTCAdaptor.publish("stream123");
+        }
+    }
+});
+
+// HLS playlist automatically generated:
+// https://your-server.com:5443/WebRTCAppEE/streams/stream123.m3u8
+```
+
+```bash SRT to HLS (Enterprise)
+# Publish via SRT
+ffmpeg -re -i input.mp4 \
+  -c:v libx264 -c:a aac \
+  -f mpegts \
+  "srt://your-server.com:4200?streamid=publish/stream123"
+
+# Access HLS:
+# https://your-server.com:5443/WebRTCAppEE/streams/stream123.m3u8
+```
+
+```bash Direct HLS Creation
+# Create HLS directly with FFmpeg (without AMS)
+ffmpeg -i input.mp4 \
+  -c:v libx264 -b:v 2500k -g 60 -sc_threshold 0 \
+  -c:a aac -b:a 128k \
+  -f hls \
+  -hls_time 6 \
+  -hls_list_size 10 \
+  -hls_segment_filename 'segment_%03d.ts' \
+  output.m3u8
+```
+
+</CodeGroup>
+
+## Playing HLS Streams
+
+### Browser Players
+
+<CodeGroup>
+
+```html Native HLS (Safari)
+<!-- Safari supports HLS natively -->
+<video id="video" controls autoplay>
+  <source src="https://your-server.com:5443/WebRTCAppEE/streams/stream123.m3u8" 
+          type="application/x-mpegURL">
+</video>
+
+<script>
+  const video = document.getElementById('video');
+  video.addEventListener('error', (e) => {
+    console.error('Video error:', e);
+  });
+</script>
+```
+
+```html HLS.js (All Browsers)
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+</head>
+<body>
+  <video id="video" controls width="100%"></video>
+
+  <script>
+    const video = document.getElementById('video');
+    const videoSrc = 'https://your-server.com:5443/WebRTCAppEE/streams/stream123.m3u8';
+
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        maxBufferLength: 30,
+        maxMaxBufferLength: 60,
+        liveSyncDuration: 3,
+        liveMaxLatencyDuration: 10
+      });
+      
+      hls.loadSource(videoSrc);
+      hls.attachMedia(video);
+      
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        console.log('Manifest loaded, playing...');
+        video.play();
+      });
+      
+      hls.on(Hls.Events.ERROR, (event, data) => {
+        console.error('HLS error:', data);
+        if (data.fatal) {
+          switch(data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              console.log('Network error, trying to recover...');
+              hls.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              console.log('Media error, trying to recover...');
+              hls.recoverMediaError();
+              break;
+            default:
+              hls.destroy();
+              break;
+          }
+        }
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Native HLS support (Safari)
+      video.src = videoSrc;
+      video.addEventListener('loadedmetadata', () => {
+        video.play();
+      });
+    }
+  </script>
+</body>
+</html>
+```
+
+```html Video.js Player
+<link href="https://vjs.zencdn.net/8.0.4/video-js.css" rel="stylesheet" />
+<script src="https://vjs.zencdn.net/8.0.4/video.min.js"></script>
+
+<video id="my-video" class="video-js vjs-default-skin" controls preload="auto" 
+       width="640" height="360" data-setup='{}'>
+  <source src="https://your-server.com:5443/WebRTCAppEE/streams/stream123.m3u8" 
+          type="application/x-mpegURL">
+</video>
+
+<script>
+  const player = videojs('my-video', {
+    liveui: true,
+    html5: {
+      vhs: {
+        overrideNative: true,
+        enableLowInitialPlaylist: true
+      }
+    }
+  });
+  
+  player.ready(function() {
+    console.log('Player ready');
+  });
+</script>
+```
+
+```javascript React Player
+import React from 'react';
+import ReactPlayer from 'react-player';
+
+function HLSPlayer() {
+  return (
+    <ReactPlayer
+      url="https://your-server.com:5443/WebRTCAppEE/streams/stream123.m3u8"
+      playing
+      controls
+      width="100%"
+      height="auto"
+      config={{
+        file: {
+          hlsOptions: {
+            maxBufferLength: 30,
+            maxMaxBufferLength: 60,
+            liveSyncDuration: 3
+          }
+        }
+      }}
+    />
+  );
+}
+
+export default HLSPlayer;
+```
+
+</CodeGroup>
+
+### Mobile Players
+
+<CodeGroup>
+
+```swift iOS (AVPlayer)
+import AVKit
+import AVFoundation
+
+class HLSPlayerViewController: UIViewController {
+    var player: AVPlayer?
+    var playerViewController: AVPlayerViewController?
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        
+        let urlString = "https://your-server.com:5443/WebRTCAppEE/streams/stream123.m3u8"
+        guard let url = URL(string: urlString) else { return }
+        
+        player = AVPlayer(url: url)
+        playerViewController = AVPlayerViewController()
+        playerViewController?.player = player
+        
+        addChild(playerViewController!)
+        view.addSubview(playerViewController!.view)
+        playerViewController!.view.frame = view.bounds
+        
+        player?.play()
+    }
+}
+```
+
+```java Android (ExoPlayer)
+import com.google.android.exoplayer2.ExoPlayer;
+import com.google.android.exoplayer2.MediaItem;
+import com.google.android.exoplayer2.ui.StyledPlayerView;
+
+public class HLSPlayerActivity extends AppCompatActivity {
+    private ExoPlayer player;
+    private StyledPlayerView playerView;
+    
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_player);
+        
+        playerView = findViewById(R.id.player_view);
+        player = new ExoPlayer.Builder(this).build();
+        playerView.setPlayer(player);
+        
+        String hlsUrl = "https://your-server.com:5443/WebRTCAppEE/streams/stream123.m3u8";
+        MediaItem mediaItem = MediaItem.fromUri(hlsUrl);
+        
+        player.setMediaItem(mediaItem);
+        player.prepare();
+        player.play();
+    }
+    
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        player.release();
+    }
+}
+```
+
+```kotlin Android (Kotlin)
+import com.google.android.exoplayer2.ExoPlayer
+import com.google.android.exoplayer2.MediaItem
+import com.google.android.exoplayer2.ui.StyledPlayerView
+
+class HLSPlayerActivity : AppCompatActivity() {
+    private lateinit var player: ExoPlayer
+    private lateinit var playerView: StyledPlayerView
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_player)
+        
+        playerView = findViewById(R.id.player_view)
+        player = ExoPlayer.Builder(this).build()
+        playerView.player = player
+        
+        val hlsUrl = "https://your-server.com:5443/WebRTCAppEE/streams/stream123.m3u8"
+        val mediaItem = MediaItem.fromUri(hlsUrl)
+        
+        player.apply {
+            setMediaItem(mediaItem)
+            prepare()
+            play()
+        }
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        player.release()
+    }
+}
+```
+
+</CodeGroup>
+
+### Desktop/CLI Players
+
+<CodeGroup>
+
+```bash FFplay
+# Basic playback
+ffplay https://your-server.com:5443/WebRTCAppEE/streams/stream123.m3u8
+
+# Low latency playback
+ffplay -fflags nobuffer -flags low_delay \
+  https://your-server.com:5443/WebRTCAppEE/streams/stream123.m3u8
+```
+
+```bash VLC
+# VLC command line
+vlc https://your-server.com:5443/WebRTCAppEE/streams/stream123.m3u8
+
+# With network caching (ms)
+vlc --network-caching=300 \
+  https://your-server.com:5443/WebRTCAppEE/streams/stream123.m3u8
+```
+
+```python Python
+import cv2
+
+# OpenCV with FFmpeg backend
+cap = cv2.VideoCapture(
+    'https://your-server.com:5443/WebRTCAppEE/streams/stream123.m3u8',
+    cv2.CAP_FFMPEG
+)
+
+while cap.isOpened():
+    ret, frame = cap.read()
+    if not ret:
+        break
+    
+    cv2.imshow('HLS Stream', frame)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
+```
+
+</CodeGroup>
+
+## Configuration Options
+
+### Server-Side Configuration
+
+Configure HLS settings in `application.properties` or via REST API:
+
+```properties
+# Enable HLS muxing
+settings.hlsMuxingEnabled=true
+
+# Segment duration (seconds)
+settings.hlsTime=6
+
+# Playlist size (number of segments)
+settings.hlsListSize=10
+
+# Playlist type: event, vod, or null (live)
+settings.hlsPlayListType=
+
+# HLS flags (comma-separated)
+settings.hlsflags=delete_segments,omit_endlist
+
+# Delete HLS files when stream ends
+settings.deleteHLSFilesOnEnded=true
+
+# Add date/time to HLS filename
+settings.addDateTimeToHlsFileName=false
+
+# HLS segment type: mpegts or fmp4
+settings.hlsSegmentType=mpegts
+
+# Segment filename format
+settings.hlsSegmentFileSuffixFormat=%09d
+
+# S3/Cloud storage
+settings.uploadExtensionsToS3=7
+settings.s3StreamsFolderPath=streams
+
+# HTTP endpoint for segments
+settings.hlsHttpEndpoint=
+
+# Encryption
+settings.hlsEncryptionKeyInfoFile=
+```
+
+### HLS Playlist Types
+
+<CodeGroup>
+
+```m3u8 Live (Default)
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-TARGETDURATION:6
+#EXT-X-MEDIA-SEQUENCE:12345
+#EXTINF:6.000,
+stream123_00012345.ts
+#EXTINF:6.000,
+stream123_00012346.ts
+#EXTINF:6.000,
+stream123_00012347.ts
+```
+
+```m3u8 Event
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-TARGETDURATION:6
+#EXT-X-PLAYLIST-TYPE:EVENT
+#EXT-X-MEDIA-SEQUENCE:0
+#EXTINF:6.000,
+stream123_000000000.ts
+#EXTINF:6.000,
+stream123_000000001.ts
+```
+
+```m3u8 VOD
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-TARGETDURATION:6
+#EXT-X-PLAYLIST-TYPE:VOD
+#EXTINF:6.000,
+segment_000.ts
+#EXTINF:6.000,
+segment_001.ts
+#EXT-X-ENDLIST
+```
+
+</CodeGroup>
+
+### Adaptive Bitrate Configuration
+
+Enable ABR in `application.properties`:
+
+```properties
+# Enable adaptive streaming
+settings.adaptiveResolutionsEnabled=true
+
+# Encoder settings for different qualities
+settings.encoderSettings=[
+  {"height":240,"videoBitrate":500000,"audioBitrate":64000},
+  {"height":360,"videoBitrate":800000,"audioBitrate":96000},
+  {"height":480,"videoBitrate":1500000,"audioBitrate":128000},
+  {"height":720,"videoBitrate":2500000,"audioBitrate":128000},
+  {"height":1080,"videoBitrate":4500000,"audioBitrate":192000}
+]
+```
+
+Master playlist structure:
+
+```m3u8
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-STREAM-INF:BANDWIDTH=564000,RESOLUTION=426x240
+stream123_240p.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=896000,RESOLUTION=640x360
+stream123_360p.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=1628000,RESOLUTION=854x480
+stream123_480p.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=2628000,RESOLUTION=1280x720
+stream123_720p.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=4692000,RESOLUTION=1920x1080
+stream123_1080p.m3u8
+```
+
+## Advanced Features
+
+### HLS Encryption (AES-128)
+
+Source: [HLSMuxer.java:144-169](file:///home/daytona/workspace/source/src/main/java/io/antmedia/muxer/HLSMuxer.java:144-169)
+
+<CodeGroup>
+
+```bash Generate Encryption Key
+# Generate random encryption key
+openssl rand 16 > stream.key
+
+# Generate initialization vector (IV)
+openssl rand -hex 16
+
+# Create key info file
+cat > keyinfo.txt << EOF
+https://your-server.com/keys/stream.key
+stream.key
+<IV_HEX_VALUE>
+EOF
+```
+
+```properties Enable Encryption
+# Configure key info file path
+settings.hlsEncryptionKeyInfoFile=/path/to/keyinfo.txt
+```
+
+```m3u8 Encrypted Playlist
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-TARGETDURATION:6
+#EXT-X-KEY:METHOD=AES-128,URI="https://your-server.com/keys/stream.key",IV=0x<IV_HEX>
+#EXTINF:6.000,
+stream123_000000000.ts
+#EXTINF:6.000,
+stream123_000000001.ts
+```
+
+</CodeGroup>
+
+### Low Latency HLS (LL-HLS)
+
+<Note>
+LL-HLS support requires Enterprise Edition. It reduces latency to 2-3 seconds.
+</Note>
+
+```properties
+# Enable LL-HLS
+settings.lLHLSEnabled=true
+
+# Part duration (typically 0.5-1 second)
+settings.hlsPartTargetDuration=0.5
+
+# Enable LL-HLS via DASH muxer
+settings.islLDashEnabled=true
+settings.hlsEnabledViaDash=true
+```
+
+### HLS with fMP4 Segments
+
+Use fragmented MP4 instead of MPEG-TS:
+
+```properties
+settings.hlsSegmentType=fmp4
+```
+
+Benefits of fMP4:
+- Better HEVC/H.265 support
+- Improved seeking
+- Smaller file sizes
+- Better for VOD
+
+## Troubleshooting
+
+### Playback Issues
+
+**CORS Errors:**
+
+```bash
+# Check CORS headers
+curl -I https://your-server.com:5443/WebRTCAppEE/streams/stream123.m3u8
+
+# Should include:
+Access-Control-Allow-Origin: *
+Access-Control-Allow-Methods: GET, POST, OPTIONS
+```
+
+Add to nginx/web server config:
+```nginx
+add_header Access-Control-Allow-Origin * always;
+add_header Access-Control-Allow-Methods 'GET, POST, OPTIONS';
+add_header Access-Control-Allow-Headers 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
+```
+
+**404 Not Found:**
+
+```bash
+# Check if stream exists
+curl https://your-server.com:5443/WebRTCAppEE/rest/v2/broadcasts/stream123
+
+# Verify HLS is enabled
+curl https://your-server.com:5443/WebRTCAppEE/rest/v2/settings | grep hlsMuxingEnabled
+
+# Check HLS files exist
+ls -la /usr/local/antmedia/webapps/WebRTCAppEE/streams/
+```
+
+**Segments Not Loading:**
+
+```bash
+# Verify segment duration
+ffprobe https://your-server.com:5443/WebRTCAppEE/streams/stream123.m3u8
+
+# Check segment availability
+curl -I https://your-server.com:5443/WebRTCAppEE/streams/stream123_000000000.ts
+
+# Monitor segment generation
+tail -f /usr/local/antmedia/log/antmedia-error.log | grep HLS
+```
+
+### Performance Optimization
+
+**Reduce Latency:**
+
+```properties
+# Shorter segment duration
+settings.hlsTime=2
+
+# Smaller playlist
+settings.hlsListSize=3
+
+# Immediate segment deletion
+settings.hlsflags=delete_segments
+```
+
+**Optimize for CDN:**
+
+```properties
+# Longer segments for better caching
+settings.hlsTime=10
+
+# Larger playlist
+settings.hlsListSize=20
+
+# Upload to S3/CDN
+settings.uploadExtensionsToS3=7
+```
+
+**Memory Usage:**
+
+```bash
+# Delete old segments
+settings.deleteHLSFilesOnEnded=true
+settings.hlsflags=delete_segments
+
+# Monitor disk usage
+du -sh /usr/local/antmedia/webapps/WebRTCAppEE/streams/
+```
+
+## Best Practices
+
+### Production Recommendations
+
+1. **Segment Duration**: Use 6 seconds for standard HLS, 2-4 seconds for low latency
+2. **Playlist Size**: Keep 3-5 segments for live, unlimited for VOD
+3. **Codec Settings**: Use H.264 baseline/main profile for maximum compatibility
+4. **HTTPS**: Always serve HLS over HTTPS in production
+5. **CDN**: Use CDN for scalability (CloudFront, Cloudflare, Akamai)
+6. **Monitoring**: Track segment generation and player errors
+
+### Recommended Settings by Use Case
+
+<CodeGroup>
+
+```properties Live Streaming
+settings.hlsTime=6
+settings.hlsListSize=10
+settings.hlsPlayListType=
+settings.hlsflags=delete_segments
+settings.deleteHLSFilesOnEnded=true
+```
+
+```properties Low Latency Live
+settings.hlsTime=2
+settings.hlsListSize=3
+settings.hlsflags=delete_segments,omit_endlist
+settings.lLHLSEnabled=true
+```
+
+```properties VOD
+settings.hlsTime=10
+settings.hlsListSize=0
+settings.hlsPlayListType=vod
+settings.deleteHLSFilesOnEnded=false
+```
+
+```properties DVR/Time-Shift
+settings.hlsTime=6
+settings.hlsListSize=100
+settings.hlsPlayListType=event
+settings.hlsflags=append_list
+settings.deleteHLSFilesOnEnded=false
+```
+
+</CodeGroup>
+
+## API Reference
+
+For complete HLS implementation details:
+- [HLSMuxer.java](file:///home/daytona/workspace/source/src/main/java/io/antmedia/muxer/HLSMuxer.java) - HLS muxer implementation
+- [Muxer.java](file:///home/daytona/workspace/source/src/main/java/io/antmedia/muxer/Muxer.java) - Base muxer class
+- [MuxAdaptor.java](file:///home/daytona/workspace/source/src/main/java/io/antmedia/muxer/MuxAdaptor.java) - Stream adaptation logic

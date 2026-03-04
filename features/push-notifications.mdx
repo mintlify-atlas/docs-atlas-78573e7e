@@ -1,0 +1,616 @@
+---
+title: Push Notifications
+description: Send real-time notifications to mobile apps via Firebase Cloud Messaging and Apple Push Notification service
+---
+
+## Overview
+
+Ant Media Server supports push notifications to notify mobile app users about stream events in real-time. This feature integrates with:
+
+- **Firebase Cloud Messaging (FCM)** - For Android and iOS apps
+- **Apple Push Notification (APN)** - For iOS apps
+
+Use cases include:
+- Notify users when a streamer goes live
+- Alert viewers about stream status changes
+- Send custom messages during broadcasts
+- Trigger app actions from server events
+
+## Architecture
+
+The push notification system uses a service interface pattern:
+
+<CodeGroup>
+```java IPushNotificationService.java
+public interface IPushNotificationService {
+    static final String BEAN_NAME = "push.notification.service";
+    
+    public enum PushNotificationServiceTypes {
+        FIREBASE_CLOUD_MESSAGING("fcm"),
+        APPLE_PUSH_NOTIFICATION("apn");
+        
+        private String name;
+        
+        PushNotificationServiceTypes(String name) {
+            this.name = name;
+        }
+        
+        @Override
+        public String toString() {
+            return this.name;
+        }
+    }
+    
+    /**
+     * Send notification to a topic
+     */
+    Result sendNotification(String topic, JSONObject jsonMessage, String serviceName);
+    
+    /**
+     * Send notification to both FCM and APN
+     */
+    Result sendNotification(String topic, JSONObject jsonMessage);
+    
+    /**
+     * Send notification to specific subscriber IDs
+     */
+    Result sendNotification(List<String> subscriberIds, JSONObject jsonMessage);
+    
+    /**
+     * Send notification to specific subscribers via specific service
+     */
+    Result sendNotification(List<String> subscriberIds, JSONObject jsonMessage, String serviceName);
+}
+```
+</CodeGroup>
+
+## Firebase Cloud Messaging (FCM) Setup
+
+### Prerequisites
+
+<Steps>
+  <Step title="Create Firebase Project">
+    1. Go to [Firebase Console](https://console.firebase.google.com/)
+    2. Click **Add Project**
+    3. Enter project name and follow setup wizard
+  </Step>
+  
+  <Step title="Get Service Account Key">
+    1. Navigate to **Project Settings → Service Accounts**
+    2. Click **Generate New Private Key**
+    3. Save the JSON file securely
+  </Step>
+  
+  <Step title="Upload to Ant Media Server">
+    Upload the service account JSON file to:
+    
+    ```bash
+    /usr/local/antmedia/webapps/LiveApp/WEB-INF/firebase-service-account.json
+    ```
+  </Step>
+</Steps>
+
+### Configuration
+
+Enable FCM in application settings:
+
+<CodeGroup>
+```json Web Panel Settings
+{
+  "pushNotificationEnabled": true,
+  "firebaseServiceAccountFile": "/usr/local/antmedia/webapps/LiveApp/WEB-INF/firebase-service-account.json"
+}
+```
+
+```bash REST API
+curl -X PUT "http://localhost:5080/LiveApp/rest/v2/applications/settings/LiveApp" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "pushNotificationEnabled": true,
+    "firebaseServiceAccountFile": "/usr/local/antmedia/webapps/LiveApp/WEB-INF/firebase-service-account.json"
+  }'
+```
+</CodeGroup>
+
+## Apple Push Notification (APN) Setup
+
+### Prerequisites
+
+<Steps>
+  <Step title="Create APN Key">
+    1. Go to [Apple Developer Portal](https://developer.apple.com/account/resources/authkeys/list)
+    2. Click **+** to create a new key
+    3. Enable **Apple Push Notifications service (APNs)**
+    4. Download the `.p8` key file
+  </Step>
+  
+  <Step title="Note Your Credentials">
+    You'll need:
+    - **Key ID** - From the downloaded key filename
+    - **Team ID** - From Apple Developer account
+    - **Bundle ID** - Your iOS app's bundle identifier
+  </Step>
+  
+  <Step title="Upload Key to Server">
+    ```bash
+    /usr/local/antmedia/webapps/LiveApp/WEB-INF/apn-key.p8
+    ```
+  </Step>
+</Steps>
+
+### Configuration
+
+<CodeGroup>
+```json APN Settings
+{
+  "apnEnabled": true,
+  "apnKeyPath": "/usr/local/antmedia/webapps/LiveApp/WEB-INF/apn-key.p8",
+  "apnKeyId": "YOUR_KEY_ID",
+  "apnTeamId": "YOUR_TEAM_ID",
+  "apnBundleId": "com.yourcompany.yourapp",
+  "apnProduction": false
+}
+```
+</CodeGroup>
+
+<Note>
+Set `apnProduction` to `true` for production apps, `false` for development/sandbox.
+</Note>
+
+## Sending Notifications
+
+### Via REST API
+
+<CodeGroup>
+```bash Topic-based Notification
+# Send to all subscribers of a topic
+curl -X POST "http://localhost:5080/LiveApp/rest/v2/push-notification/send" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "topic": "stream-updates",
+    "message": {
+      "title": "Stream Started",
+      "body": "Your favorite streamer is now live!",
+      "streamId": "stream123"
+    },
+    "service": "fcm"
+  }'
+```
+
+```bash Subscriber-based Notification  
+# Send to specific subscribers
+curl -X POST "http://localhost:5080/LiveApp/rest/v2/push-notification/send" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subscriberIds": ["user123", "user456", "user789"],
+    "message": {
+      "title": "Live Event",
+      "body": "Conference starts in 5 minutes",
+      "action": "join-stream",
+      "streamId": "conference-2024"
+    }
+  }'
+```
+
+```bash Both FCM and APN
+# Send to both services simultaneously
+curl -X POST "http://localhost:5080/LiveApp/rest/v2/push-notification/send" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "topic": "live-alerts",
+    "message": {
+      "title": "New Stream",
+      "body": "Check out this amazing stream!"
+    }
+  }'
+```
+</CodeGroup>
+
+### Programmatic Usage
+
+<CodeGroup>
+```java Java
+import io.antmedia.pushnotification.IPushNotificationService;
+import org.json.simple.JSONObject;
+
+public class NotificationExample {
+    
+    public void notifyStreamStart(String streamId, String streamerName) {
+        IPushNotificationService pushService = 
+            (IPushNotificationService) context.getBean(
+                IPushNotificationService.BEAN_NAME);
+        
+        JSONObject message = new JSONObject();
+        message.put("title", "Stream Started");
+        message.put("body", streamerName + " is now live!");
+        message.put("streamId", streamId);
+        message.put("action", "watch-stream");
+        
+        // Send to topic
+        Result result = pushService.sendNotification(
+            "stream-" + streamId, 
+            message
+        );
+        
+        if (result.isSuccess()) {
+            logger.info("Notification sent successfully");
+        }
+    }
+}
+```
+
+```javascript JavaScript (Node.js)
+const sendNotification = async (topic, title, body, data = {}) => {
+  const response = await fetch('http://localhost:5080/LiveApp/rest/v2/push-notification/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      topic: topic,
+      message: {
+        title: title,
+        body: body,
+        ...data
+      }
+    })
+  });
+  
+  return await response.json();
+};
+
+// Usage
+await sendNotification(
+  'stream-updates',
+  'New Follower',
+  'John Doe started following you',
+  { userId: 'john123', action: 'view-profile' }
+);
+```
+</CodeGroup>
+
+## Message Format
+
+### Standard Fields
+
+| Field | Type | Description | Required |
+|-------|------|-------------|----------|
+| `title` | string | Notification title | Yes |
+| `body` | string | Notification message | Yes |
+| `icon` | string | Icon URL or name | No |
+| `image` | string | Large image URL | No |
+| `sound` | string | Notification sound | No |
+| `badge` | integer | Badge count (iOS) | No |
+
+### Custom Data
+
+Add any custom fields for your app logic:
+
+```json
+{
+  "title": "New Comment",
+  "body": "Someone commented on your stream",
+  "streamId": "stream123",
+  "commentId": "comment456",
+  "action": "view-comment",
+  "timestamp": 1709566230000
+}
+```
+
+## Topic Management
+
+### Subscribe Users to Topics
+
+Manage topic subscriptions from your mobile app:
+
+<Tabs>
+  <Tab title="Android (FCM)">
+    ```java
+    FirebaseMessaging.getInstance().subscribeToTopic("stream-updates")
+        .addOnCompleteListener(task -> {
+            if (task.isSuccessful()) {
+                Log.d(TAG, "Subscribed to stream-updates");
+            }
+        });
+    ```
+  </Tab>
+  
+  <Tab title="iOS (FCM)">
+    ```swift
+    Messaging.messaging().subscribe(toTopic: "stream-updates") { error in
+      if let error = error {
+        print("Error subscribing: \(error)")
+      } else {
+        print("Subscribed to stream-updates")
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Topic Naming Conventions
+
+Organize topics logically:
+
+```
+stream-{streamId}           # Stream-specific notifications
+user-{userId}               # User-specific notifications  
+live-alerts                 # All live stream alerts
+category-{category}         # Category-based notifications
+language-{lang}             # Language-specific content
+```
+
+## Integration with Stream Events
+
+### Automatic Notifications
+
+Trigger notifications on stream events using webhooks:
+
+<CodeGroup>
+```json Webhook Configuration
+{
+  "listenerHookURL": "http://localhost:3000/webhook",
+  "pushNotificationEnabled": true
+}
+```
+
+```javascript Webhook Handler (Node.js)
+app.post('/webhook', async (req, res) => {
+  const { action, streamId, streamName } = req.body;
+  
+  if (action === 'liveStreamStarted') {
+    // Send push notification
+    await sendNotification(
+      `stream-${streamId}`,
+      'Stream Started',
+      `${streamName} is now live!`,
+      { streamId, action: 'watch-stream' }
+    );
+  }
+  
+  res.status(200).send('OK');
+});
+```
+</CodeGroup>
+
+### Supported Events
+
+| Event | Action Value | Use Case |
+|-------|--------------|----------|
+| Stream Started | `liveStreamStarted` | Notify followers |
+| Stream Ended | `liveStreamEnded` | Update watch history |
+| Recording Ready | `vodReady` | Notify about available replay |
+| Viewer Milestone | - | "100 viewers watching" |
+| Comment Added | - | Notify streamer of comments |
+
+## Mobile App Implementation
+
+### Android (FCM)
+
+<CodeGroup>
+```kotlin MainActivity.kt
+import com.google.firebase.messaging.FirebaseMessaging
+
+class MainActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        // Get FCM token
+        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+            if (task.isSuccessful) {
+                val token = task.result
+                // Send token to your server for subscriber management
+                registerDevice(token)
+            }
+        }
+        
+        // Subscribe to topics
+        FirebaseMessaging.getInstance().subscribeToTopic("stream-updates")
+    }
+    
+    private fun registerDevice(token: String) {
+        // Send to AMS or your backend
+        // Store token with user ID for targeted notifications
+    }
+}
+```
+
+```kotlin MyFirebaseMessagingService.kt
+import com.google.firebase.messaging.FirebaseMessagingService
+import com.google.firebase.messaging.RemoteMessage
+
+class MyFirebaseMessagingService : FirebaseMessagingService() {
+    
+    override fun onMessageReceived(message: RemoteMessage) {
+        // Handle notification
+        val title = message.notification?.title
+        val body = message.notification?.body
+        val streamId = message.data["streamId"]
+        val action = message.data["action"]
+        
+        when (action) {
+            "watch-stream" -> {
+                // Open stream playback screen
+                openStream(streamId)
+            }
+            "view-comment" -> {
+                // Navigate to comments
+                openComments(streamId)
+            }
+        }
+        
+        // Show notification
+        showNotification(title, body)
+    }
+    
+    override fun onNewToken(token: String) {
+        // Token refreshed - update on server
+        registerDevice(token)
+    }
+}
+```
+</CodeGroup>
+
+### iOS (APN)
+
+<CodeGroup>
+```swift AppDelegate.swift
+import UIKit
+import UserNotifications
+import Firebase
+
+@UIApplicationMain
+class AppDelegate: UIResponder, UIApplicationDelegate {
+    
+    func application(_ application: UIApplication,
+                    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        
+        // Configure Firebase
+        FirebaseApp.configure()
+        
+        // Request notification permissions
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+            if granted {
+                DispatchQueue.main.async {
+                    application.registerForRemoteNotifications()
+                }
+            }
+        }
+        
+        return true
+    }
+    
+    func application(_ application: UIApplication,
+                    didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        // Send token to server
+        let token = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
+        registerDevice(token: token)
+    }
+    
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                               didReceive response: UNNotificationResponse,
+                               withCompletionHandler completionHandler: @escaping () -> Void) {
+        
+        let userInfo = response.notification.request.content.userInfo
+        
+        if let streamId = userInfo["streamId"] as? String,
+           let action = userInfo["action"] as? String {
+            
+            switch action {
+            case "watch-stream":
+                openStream(streamId: streamId)
+            default:
+                break
+            }
+        }
+        
+        completionHandler()
+    }
+}
+```
+</CodeGroup>
+
+## Testing Notifications
+
+### Test FCM
+
+```bash
+curl -X POST "http://localhost:5080/LiveApp/rest/v2/push-notification/send" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "topic": "test",
+    "message": {
+      "title": "Test Notification",
+      "body": "This is a test"
+    },
+    "service": "fcm"
+  }'
+```
+
+### Test APN
+
+```bash
+curl -X POST "http://localhost:5080/LiveApp/rest/v2/push-notification/send" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subscriberIds": ["YOUR_DEVICE_TOKEN"],
+    "message": {
+      "title": "Test APN",
+      "body": "Testing Apple Push Notification"
+    },
+    "service": "apn"
+  }'
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Notifications not received (FCM)">
+    **Check:**
+    - Service account JSON file is correct and in right location
+    - Device/app is subscribed to the topic
+    - FCM token is valid and not expired
+    - App has notification permissions
+    
+    **Debug:**
+    ```bash
+    # Check AMS logs
+    tail -f /usr/local/antmedia/log/ant-media-server.log | grep -i "push"
+    
+    # Verify Firebase project settings in JSON file
+    cat /usr/local/antmedia/webapps/LiveApp/WEB-INF/firebase-service-account.json
+    ```
+  </Accordion>
+  
+  <Accordion title="Notifications not received (APN)">
+    **Common issues:**
+    - Using production key with development app (or vice versa)
+    - Wrong bundle ID
+    - Invalid .p8 key file
+    - Device token format incorrect
+    
+    **Solutions:**
+    - Match `apnProduction` setting with app build type
+    - Verify bundle ID matches app's bundle identifier  
+    - Regenerate .p8 key if necessary
+    - Ensure device token is properly formatted (no spaces/special chars)
+  </Accordion>
+  
+  <Accordion title="High notification latency">
+    **Causes:**
+    - Network issues between AMS and FCM/APN servers
+    - Rate limiting by FCM/APN
+    - Server overload
+    
+    **Solutions:**
+    - Check server internet connectivity
+    - Implement batching for bulk notifications
+    - Monitor notification send rates
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Personalize Messages" icon="user">
+    Use subscriber-specific data to make notifications relevant. Include streamer names, custom actions, etc.
+  </Card>
+  
+  <Card title="Rate Limiting" icon="gauge">
+    Don't spam users. Implement throttling for frequent events like viewer count updates.
+  </Card>
+  
+  <Card title="Action Buttons" icon="hand-pointer">
+    Include actionable data in notifications so users can directly interact (watch stream, reply, etc.).
+  </Card>
+  
+  <Card title="Analytics" icon="chart-line">
+    Track notification delivery rates and user engagement to optimize messaging strategy.
+  </Card>
+</CardGroup>
+
+## Related Resources
+
+- [Webhooks](/features/webhooks)
+- [REST API Reference](/api/push-notifications)
+- [Mobile SDK Documentation](/sdks/overview)
+- [Firebase Console](https://console.firebase.google.com/)
+- [Apple Developer Portal](https://developer.apple.com/)

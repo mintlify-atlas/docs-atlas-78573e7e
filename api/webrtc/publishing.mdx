@@ -1,0 +1,357 @@
+---
+title: "Publishing WebRTC Streams"
+description: "Learn how to publish WebRTC streams to Ant Media Server with JavaScript SDK"
+---
+
+## Overview
+
+Publishing a WebRTC stream to Ant Media Server involves capturing media from the user's camera/microphone and sending it to the server. The server handles the stream ingestion and makes it available for playback or recording.
+
+## Quick Start
+
+### Basic Publishing Example
+
+```javascript
+// Initialize WebRTC Adaptor
+var webRTCAdaptor = new WebRTCAdaptor({
+    websocket_url: "wss://your-server.com:5443/WebRTCAppEE/websocket",
+    mediaConstraints: {
+        video: true,
+        audio: true
+    },
+    peerconnection_config: {
+        iceServers: [{urls: "stun:stun1.l.google.com:19302"}]
+    },
+    sdp_constraints: {
+        OfferToReceiveAudio: false,
+        OfferToReceiveVideo: false
+    },
+    localVideoId: "localVideo",
+    callback: function(info, obj) {
+        if (info == "initialized") {
+            console.log("WebRTC Adaptor initialized");
+        }
+        else if (info == "publish_started") {
+            console.log("Publishing started for stream: " + obj.streamId);
+        }
+        else if (info == "publish_finished") {
+            console.log("Publishing finished");
+        }
+    },
+    callbackError: function(error, message) {
+        console.log("Error: " + error + " Message: " + message);
+    }
+});
+
+// Start publishing
+var streamId = "stream123";
+webRTCAdaptor.publish(streamId);
+```
+
+## Configuration Options
+
+### WebSocket URL
+
+The WebSocket URL format:
+
+```javascript
+websocket_url: "wss://domain:port/application/websocket"
+```
+
+- **wss://** - Secure WebSocket protocol (required for HTTPS)
+- **domain** - Your Ant Media Server domain or IP
+- **port** - WebSocket port (default: 5443 for HTTPS, 5080 for HTTP)
+- **application** - Application name (e.g., WebRTCAppEE, LiveApp)
+
+### Media Constraints
+
+Control which media devices to use and their properties:
+
+```javascript
+mediaConstraints: {
+    video: {
+        width: { min: 640, ideal: 1280, max: 1920 },
+        height: { min: 480, ideal: 720, max: 1080 },
+        frameRate: { ideal: 30, max: 60 },
+        facingMode: "user" // or "environment" for rear camera
+    },
+    audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+    }
+}
+```
+
+### Audio-Only Publishing
+
+```javascript
+mediaConstraints: {
+    video: false,
+    audio: true
+}
+```
+
+### Screen Sharing
+
+```javascript
+// Use screen constraints instead of camera
+mediaConstraints: {
+    video: {
+        displaySurface: "monitor", // or "window", "application"
+    },
+    audio: false
+}
+
+// Call getUserMedia with screen sharing
+webRTCAdaptor.getUserMedia(mediaConstraints, "screen");
+```
+
+### ICE Server Configuration
+
+```javascript
+peerconnection_config: {
+    iceServers: [
+        { urls: "stun:stun1.l.google.com:19302" },
+        {
+            urls: "turn:turn.example.com:3478",
+            username: "user",
+            credential: "pass"
+        }
+    ]
+}
+```
+
+## Callbacks
+
+### Main Callback Events
+
+The `callback` function receives various events during the publishing lifecycle:
+
+```javascript
+callback: function(info, obj) {
+    switch(info) {
+        case "initialized":
+            // WebRTC Adaptor is ready
+            console.log("Initialized");
+            break;
+            
+        case "publish_started":
+            // Publishing successfully started
+            console.log("Stream ID: " + obj.streamId);
+            break;
+            
+        case "publish_finished":
+            // Publishing stopped
+            console.log("Publishing finished");
+            break;
+            
+        case "browser_screen_share_supported":
+            // Browser supports screen sharing
+            break;
+            
+        case "screen_share_stopped":
+            // User stopped screen sharing
+            break;
+            
+        case "closed":
+            // WebSocket connection closed
+            break;
+            
+        case "pong":
+            // Received pong response from server
+            break;
+            
+        case "refreshConnection":
+            // Connection needs to be refreshed
+            break;
+    }
+}
+```
+
+### Error Callback
+
+```javascript
+callbackError: function(error, message) {
+    switch(error) {
+        case "no_stream_exist":
+            console.log("No stream exists with id: " + message);
+            break;
+            
+        case "notSetLocalDescription":
+            console.log("Failed to set local description");
+            break;
+            
+        case "WebSocketNotConnected":
+            console.log("WebSocket not connected");
+            break;
+            
+        case "not_allowed_unregistered_streams":
+            console.log("Stream registration required");
+            break;
+            
+        case "publishTimeoutError":
+            console.log("Publish timeout");
+            break;
+    }
+}
+```
+
+## Advanced Publishing
+
+### Publishing with Token
+
+For secure streams requiring authentication:
+
+```javascript
+var streamId = "stream123";
+var token = "your-generated-token";
+
+webRTCAdaptor.publish(streamId, token);
+```
+
+### Publishing with Metadata
+
+```javascript
+// Set subscriber ID or other metadata
+var streamId = "stream123";
+var token = null;
+var subscriberId = "subscriber123";
+var subscriberCode = "code456";
+
+webRTCAdaptor.publish(streamId, token, subscriberId, subscriberCode);
+```
+
+### Multi-Track Publishing
+
+Publish multiple video/audio tracks:
+
+```javascript
+// Add additional camera or screen share
+var secondVideoTrackId = "track2";
+webRTCAdaptor.addVideoTrack(streamId, secondVideoTrackId);
+
+// Remove track
+webRTCAdaptor.removeVideoTrack(streamId, secondVideoTrackId);
+```
+
+## Server-Side API
+
+### IWebRTCAdaptor Interface
+
+The server-side adaptor manages stream registration:
+
+```java
+public interface IWebRTCAdaptor {
+    // Register a muxer for stream distribution
+    void registerMuxer(String streamId, IWebRTCMuxer webRTCMuxer);
+    
+    // Unregister muxer
+    void unRegisterMuxer(String streamId, IWebRTCMuxer webRTCMuxer);
+    
+    // Register WebRTC client
+    boolean registerWebRTCClient(String streamId, IWebRTCClient webRTCClient, 
+                                 VideoCodec codec);
+    
+    // Check if stream exists
+    boolean streamExists(String streamId);
+    
+    // Get stream information
+    List<IStreamInfo> getStreamInfo(String streamId);
+}
+```
+
+### IWebRTCMuxer Interface
+
+The muxer handles stream multiplexing to multiple clients:
+
+```java
+public interface IWebRTCMuxer {
+    // Register to WebRTC Adaptor
+    void registerToAdaptor();
+    
+    // Register new WebRTC client
+    void registerWebRTCClient(IWebRTCClient webRTCClient);
+    
+    // Send video packet to all registered clients
+    void sendVideoPacket(ByteBuffer videoPacket, boolean isKeyFrame, 
+                        long timestamp, int frameRotation);
+    
+    // Send audio packet to all registered clients
+    void sendAudioPacket(ByteBuffer audioPacket, long timestamp);
+    
+    // Get number of viewers
+    int getClientCount();
+}
+```
+
+## Best Practices
+
+### 1. Handle User Permissions
+
+```javascript
+navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+    .then(function(stream) {
+        // Permissions granted, initialize WebRTC Adaptor
+        webRTCAdaptor.publish(streamId);
+    })
+    .catch(function(error) {
+        console.log("Permission denied: " + error);
+    });
+```
+
+### 2. Stop Publishing Properly
+
+```javascript
+// Stop publishing and release media
+webRTCAdaptor.stop(streamId);
+
+// Close WebSocket connection
+webRTCAdaptor.closeWebSocket();
+```
+
+### 3. Monitor Connection State
+
+```javascript
+// Send periodic ping to keep connection alive
+setInterval(function() {
+    webRTCAdaptor.ping();
+}, 3000);
+```
+
+### 4. Use Unique Stream IDs
+
+```javascript
+// Generate unique stream ID
+var streamId = "stream_" + Math.random().toString(36).substring(7);
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**Issue: getUserMedia fails**
+- Ensure page is served over HTTPS (or localhost)
+- Check browser permissions
+- Verify camera/microphone is not in use by another application
+
+**Issue: Publishing timeout**
+- Check WebSocket connectivity
+- Verify server is running and accessible
+- Check firewall rules for WebRTC ports
+
+**Issue: No video/audio**
+- Verify media constraints are correct
+- Check browser console for errors
+- Ensure localVideoId element exists in DOM
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Playing Streams" icon="play" href="/api/webrtc/playing">
+    Learn how to play published WebRTC streams
+  </Card>
+  <Card title="Peer-to-Peer" icon="users" href="/api/webrtc/peer-to-peer">
+    Build P2P applications with WebRTC
+  </Card>
+</CardGroup>

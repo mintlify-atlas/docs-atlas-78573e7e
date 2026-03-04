@@ -1,0 +1,566 @@
+---
+title: "SRT Streaming"
+description: "Secure Reliable Transport protocol for low-latency streaming over unreliable networks"
+---
+
+## Overview
+
+SRT (Secure Reliable Transport) is an open-source protocol that delivers low-latency video streaming over unreliable networks. It uses techniques like packet loss recovery and encryption to ensure high-quality streaming even in challenging network conditions.
+
+### Key Benefits
+
+- **Low latency**: Typically 1-4 seconds with packet recovery
+- **Reliable**: Automatic retransmission and forward error correction
+- **Secure**: AES encryption built-in
+- **Firewall-friendly**: Works with NAT and firewalls using caller/listener modes
+- **Network resilience**: Handles packet loss, jitter, and bandwidth fluctuations
+- **Codec support**: Agnostic - supports H.264, H.265, VP8, VP9, AAC, Opus
+
+## Publishing Streams
+
+### SRT Publisher Modes
+
+SRT supports three connection modes:
+- **Caller**: Initiates connection to listener
+- **Listener**: Waits for incoming connections
+- **Rendezvous**: Both peers connect to each other
+
+<CodeGroup>
+
+```bash FFmpeg Caller Mode
+# Publish to Ant Media Server (caller mode)
+ffmpeg -re -i input.mp4 \
+  -c:v libx264 -preset veryfast -b:v 2500k -maxrate 2500k -bufsize 5000k \
+  -g 60 -sc_threshold 0 \
+  -c:a aac -b:a 128k -ar 44100 \
+  -f mpegts \
+  "srt://your-server.com:4200?streamid=publish/stream123&passphrase=yourpassword"
+
+# With latency and other SRT parameters
+ffmpeg -re -i input.mp4 \
+  -c:v libx264 -preset ultrafast -tune zerolatency \
+  -b:v 3000k -maxrate 3000k -bufsize 6000k \
+  -c:a aac -b:a 128k \
+  -f mpegts \
+  "srt://your-server.com:4200?streamid=publish/stream123\
+&latency=200\
+&passphrase=secret\
+&pbkeylen=16\
+&lossmaxttl=40"
+```
+
+```bash FFmpeg Listener Mode
+# Ant Media Server connects to this FFmpeg instance
+ffmpeg -re -i input.mp4 \
+  -c:v libx264 -preset veryfast -b:v 2500k \
+  -c:a aac -b:a 128k \
+  -f mpegts \
+  "srt://0.0.0.0:9000?mode=listener&streamid=stream123"
+
+# In another terminal, configure AMS to pull from this SRT stream
+curl -X POST "https://your-server.com:5443/WebRTCAppEE/rest/v2/broadcasts/create" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "streamId": "stream123",
+    "type": "streamSource",
+    "streamUrl": "srt://your-ip:9000?streamid=stream123"
+  }'
+```
+
+```bash OBS Studio SRT Settings
+# OBS Studio → Settings → Stream
+Service: Custom
+Server: srt://your-server.com:4200
+Stream Key: publish/stream123,passphrase=yourpassword
+
+# Advanced SRT options in OBS (Custom FFmpeg output):
+Output → Recording → Type: Custom Output (FFmpeg)
+FFmpeg Output Type: Output to URL
+File path or URL: srt://your-server.com:4200?streamid=publish/stream123&latency=200&passphrase=secret
+Container Format: mpegts
+Video Encoder: libx264
+Audio Encoder: aac
+```
+
+```python Python (libsrt)
+import srt
+import cv2
+import numpy as np
+
+# Create SRT socket
+sock = srt.socket()
+sock.setsockopt(srt.SRTO_SENDER, True)
+sock.setsockopt(srt.SRTO_LATENCY, 200)
+sock.setsockopt(srt.SRTO_PASSPHRASE, b"yourpassword")
+
+# Connect to server
+sock.connect(("your-server.com", 4200))
+
+# Send stream
+cap = cv2.VideoCapture(0)
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
+    
+    # Encode frame to H.264 (example uses raw for simplicity)
+    data = frame.tobytes()
+    sock.sendall(data)
+
+sock.close()
+cap.release()
+```
+
+```javascript Node.js (node-srt)
+const srt = require('node-srt');
+const fs = require('fs');
+
+const socket = srt.createSocket(false);
+
+socket.bind('0.0.0.0', 9000);
+socket.listen(1);
+
+socket.on('connection', (connection) => {
+    console.log('SRT client connected');
+    
+    connection.on('data', (chunk) => {
+        // Handle incoming SRT data
+        console.log('Received chunk:', chunk.length, 'bytes');
+        // Process or forward to Ant Media Server
+    });
+    
+    connection.on('close', () => {
+        console.log('SRT connection closed');
+    });
+});
+```
+
+</CodeGroup>
+
+### Hardware Encoders with SRT
+
+<CodeGroup>
+
+```yaml Teradek Encoders
+Streaming → Encoder Settings:
+  Protocol: SRT
+  Mode: Caller
+  Remote Host: your-server.com
+  Remote Port: 4200
+  Stream ID: publish/stream123
+  Latency: 200ms
+  Passphrase: yourpassword
+  Encryption: AES-128 or AES-256
+```
+
+```yaml Makito X Decoder
+SRT Settings:
+  Connection Mode: Caller
+  Destination Address: your-server.com:4200
+  Stream ID: publish/stream123  
+  Latency: 200 ms
+  Encryption: Enabled
+  Key Length: 16 (128-bit) or 32 (256-bit)
+```
+
+```yaml Haivision SRT Encoders
+Destination:
+  Protocol: SRT
+  Mode: Caller
+  Address: your-server.com
+  Port: 4200
+  Stream ID: publish/stream123
+  Latency: 120-500 ms
+  Encryption: AES-256
+  Passphrase: yourpassword
+```
+
+</CodeGroup>
+
+## Playing Streams
+
+### SRT Playback
+
+<CodeGroup>
+
+```bash FFplay
+# Play SRT stream
+ffplay -fflags nobuffer \
+  "srt://your-server.com:4200?streamid=play/stream123&passphrase=yourpassword"
+
+# Play with custom latency
+ffplay -fflags nobuffer \
+  "srt://your-server.com:4200?streamid=play/stream123&latency=1000&passphrase=secret"
+```
+
+```bash VLC Media Player
+# VLC → Media → Open Network Stream
+network URL: srt://your-server.com:4200?streamid=play/stream123
+
+# Command line
+vlc "srt://your-server.com:4200?streamid=play/stream123&passphrase=yourpassword"
+```
+
+```python Python Player
+import srt
+import cv2
+import numpy as np
+
+# Connect to SRT stream
+sock = srt.socket()
+sock.setsockopt(srt.SRTO_LATENCY, 1000)
+sock.setsockopt(srt.SRTO_PASSPHRASE, b"yourpassword")
+sock.connect(("your-server.com", 4200))
+sock.send(b"play/stream123")  # Send streamid
+
+# Receive and display
+while True:
+    data = sock.recv(1316)  # SRT packet size
+    if not data:
+        break
+    
+    # Decode and display video
+    # (requires proper TS/H.264 demuxing and decoding)
+    
+sock.close()
+```
+
+```javascript Node.js Player
+const srt = require('node-srt');
+
+const socket = srt.createSocket();
+
+socket.connect('your-server.com', 4200, () => {
+    console.log('Connected to SRT stream');
+    
+    // Send streamid
+    socket.write('play/stream123');
+});
+
+socket.on('data', (chunk) => {
+    console.log('Received:', chunk.length, 'bytes');
+    // Process MPEG-TS data
+});
+
+socket.on('error', (err) => {
+    console.error('SRT error:', err);
+});
+```
+
+</CodeGroup>
+
+## Configuration Options
+
+### Server Configuration
+
+```properties
+# SRT settings in application.properties (Enterprise Edition)
+
+# Enable SRT
+settings.srtEnabled=true
+
+# SRT port
+settings.srtPort=4200
+
+# Default latency (milliseconds)
+settings.srtLatency=200
+
+# Max bandwidth (bytes per second, 0 = unlimited)
+settings.srtMaxBandwidth=0
+
+# Passphrase for encryption (optional)
+settings.srtPassphrase=
+
+# Encryption key length (16, 24, or 32 for AES-128, 192, 256)
+settings.srtPbkeylen=16
+```
+
+### SRT URL Parameters
+
+Common SRT parameters in URL query string:
+
+```bash
+srt://server:port?parameter=value
+
+# Connection parameters
+mode=caller|listener|rendezvous
+streamid=publish/stream123  # Stream identifier
+passphrase=secret           # Encryption passphrase
+pbkeylen=16|24|32          # Key length (AES-128/192/256)
+
+# Performance parameters  
+latency=200                 # Latency in milliseconds (120-8000)
+maxbw=0                     # Max bandwidth (0=unlimited)
+lossmaxttl=40              # Max packet retransmit attempts
+nakreport=true             # Enable periodic NAK reports
+conntimeo=3000             # Connection timeout (ms)
+
+# Advanced parameters
+sndbuf=12058624            # Send buffer size (bytes)
+rcvbuf=12058624            # Receive buffer size (bytes) 
+mss=1500                   # Maximum segment size
+fc=32                      # Flow control window size
+iptos=0xB8                 # Type of service
+ipttl=64                   # Time to live
+ffs=25600                  # Flight flag size
+ohead=25                   # Sender-side buffer overhead
+```
+
+### Latency Configuration
+
+Choose latency based on your use case:
+
+```yaml
+Ultra-Low Latency (Local network):
+  latency: 120-200 ms
+  Use case: Local production, campus streaming
+
+Low Latency (Good network):
+  latency: 200-500 ms  
+  Use case: Regional contribution, live events
+
+Standard (Internet):
+  latency: 500-2000 ms
+  Use case: Remote contribution over internet
+
+High Latency (Challenging network):
+  latency: 2000-8000 ms
+  Use case: Satellite, cellular, high packet loss
+```
+
+## Security & Encryption
+
+### Enable AES Encryption
+
+<CodeGroup>
+
+```bash AES-128
+srt://server:4200?streamid=publish/stream123&passphrase=mysecret&pbkeylen=16
+```
+
+```bash AES-256  
+srt://server:4200?streamid=publish/stream123&passphrase=strongpassword&pbkeylen=32
+```
+
+```properties Server Config
+# Force encryption on server
+settings.srtPassphrase=server-wide-secret
+settings.srtPbkeylen=32
+
+# Reject unencrypted connections
+settings.srtEnforcedEncryption=true
+```
+
+</CodeGroup>
+
+### Stream ID Authentication
+
+Use stream IDs to control access:
+
+```bash
+# Format: action/streamId/extra-params
+publish/stream123
+play/stream123  
+publish/stream123/user=john&token=abc123
+```
+
+## Troubleshooting
+
+### Connection Issues
+
+**Cannot connect to SRT server:**
+
+```bash
+# Test SRT port
+telnet your-server.com 4200
+
+# Check firewall
+sudo ufw allow 4200/udp
+sudo firewall-cmd --add-port=4200/udp --permanent
+
+# Verify SRT is enabled
+curl http://your-server.com:5080/WebRTCAppEE/rest/v2/settings
+```
+
+**Passphrase mismatch:**
+```
+Error: "SRT Connection Error: Invalid passphrase"
+
+Solution:
+- Ensure client and server use same passphrase
+- Check pbkeylen matches (16, 24, or 32)
+- Verify no special characters causing encoding issues
+```
+
+### Performance Issues
+
+**High packet loss:**
+
+```bash
+# Increase latency to allow more retransmissions
+latency=2000
+
+# Increase max packet retransmit attempts  
+lossmaxttl=100
+
+# Enable stats monitoring
+ffmpeg -v verbose -stats \
+  -i "srt://server:4200?streamid=play/stream&latency=2000" \
+  -f null -
+```
+
+**Buffering/freezing:**
+
+```bash
+# Increase receive buffer
+rcvbuf=12058624
+
+# Adjust latency based on RTT
+# Rule of thumb: latency = 4 * RTT
+latency=400  # for 100ms RTT
+
+# Check network stats
+srt-live-transmit -statsout -1 \
+  "srt://server:4200?streamid=play/stream123" \
+  "udp://127.0.0.1:5000"
+```
+
+### Debug Commands
+
+```bash
+# Monitor SRT statistics with srt-stats-live-transmit
+srt-live-transmit \
+  -statsout 1000 \
+  "srt://server:4200?streamid=play/stream123" \
+  "file://output.ts"
+
+# Analyze stream with FFprobe
+ffprobe -v quiet -print_format json -show_streams \
+  "srt://server:4200?streamid=play/stream123&passphrase=secret"
+
+# Check SRT connection stats
+netstat -su | grep -i udp
+
+# Monitor bandwidth usage
+iftop -f "udp port 4200"
+
+# Packet capture
+sudo tcpdump -i any udp port 4200 -w srt_capture.pcap
+```
+
+## Best Practices
+
+### Production Recommendations
+
+1. **Set appropriate latency**: Start with 200ms, increase if packet loss occurs
+2. **Use encryption**: Always use passphrase in production
+3. **Monitor stats**: Enable SRT statistics for health monitoring
+4. **Configure firewalls**: Allow UDP traffic on SRT port
+5. **Use caller mode**: More firewall-friendly than listener mode
+6. **Implement reconnection**: Handle connection drops gracefully
+
+### Quality Settings by Use Case
+
+<CodeGroup>
+
+```bash Live Sports (Low Latency)
+ffmpeg -re -i input.mp4 \
+  -c:v libx264 -preset ultrafast -tune zerolatency \
+  -b:v 5000k -maxrate 5000k -bufsize 10000k \
+  -g 30 -sc_threshold 0 \
+  -c:a aac -b:a 192k \
+  -f mpegts \
+  "srt://server:4200?streamid=publish/sports&latency=120&passphrase=secret"
+```
+
+```bash News Contribution (Balanced)
+ffmpeg -re -i input.mp4 \
+  -c:v libx264 -preset veryfast \
+  -b:v 3000k -maxrate 3000k -bufsize 6000k \
+  -g 60 \
+  -c:a aac -b:a 128k \
+  -f mpegts \
+  "srt://server:4200?streamid=publish/news&latency=500&lossmaxttl=40"
+```
+
+```bash Remote Production (Reliable)
+ffmpeg -re -i input.mp4 \
+  -c:v libx264 -preset medium \
+  -b:v 4500k -maxrate 4500k -bufsize 9000k \
+  -g 60 \
+  -c:a aac -b:a 192k \
+  -f mpegts \
+  "srt://server:4200?streamid=publish/remote&latency=2000&lossmaxttl=100&passphrase=secret"
+```
+
+</CodeGroup>
+
+### Bandwidth Optimization
+
+```bash
+# Limit bandwidth for specific use cases
+
+# 5 Mbps limit
+maxbw=625000  # bytes per second
+
+# Calculate bandwidth:
+# video bitrate + audio bitrate + 15% overhead
+# Example: 3000k video + 128k audio = 3128k = 391KB/s
+# With overhead: 391 * 1.15 = 450 KB/s
+maxbw=450000
+```
+
+## Integration Examples
+
+### Pull SRT Stream to Ant Media Server
+
+```bash
+# Create stream source pointing to external SRT stream
+curl -X POST "https://your-server.com:5443/WebRTCAppEE/rest/v2/broadcasts/create" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "SRT Stream",
+    "streamId": "srt_stream_123",
+    "type": "streamSource",
+    "streamUrl": "srt://external-server.com:9000?streamid=input&latency=1000"
+  }'
+
+# Start pulling
+curl -X POST "https://your-server.com:5443/WebRTCAppEE/rest/v2/broadcasts/srt_stream_123/start"
+
+# Stop pulling  
+curl -X POST "https://your-server.com:5443/WebRTCAppEE/rest/v2/broadcasts/srt_stream_123/stop"
+```
+
+### Convert SRT to Other Formats
+
+Ant Media Server automatically converts SRT input to:
+- **WebRTC** for browser playback
+- **HLS** for mobile/smart TV
+- **DASH** for adaptive streaming
+- **RTMP** for restreaming
+
+Enable in configuration:
+```properties
+settings.hlsMuxingEnabled=true
+settings.dashMuxingEnabled=true  
+settings.webRTCEnabled=true
+```
+
+## SRT vs Other Protocols
+
+| Feature | SRT | RTMP | WebRTC | RTSP |
+|---------|-----|------|--------|------|
+| Latency | 1-4s | 3-10s | Less than 1s | 1-3s |
+| Reliability | High | Medium | Medium | Low |
+| Encryption | Built-in | RTMPS | Built-in | RTSPS |
+| Firewall | Good | Good | Excellent | Poor |
+| Packet Loss | Handles well | Drops stream | Adapts | Stutters |
+| Use Case | Contribution | Ingestion | Interactive | CCTV |
+
+Choose SRT for:
+- Remote contribution feeds
+- Bonded cellular streaming  
+- Satellite links
+- Long-distance streaming
+- High-quality contribution with reliability

@@ -1,0 +1,128 @@
+---
+title: "Storage Overview"
+description: "Configure cloud storage integrations to automatically upload and manage your recorded media files"
+---
+
+## What is Storage Integration?
+
+Ant Media Server provides seamless cloud storage integration to automatically upload your recorded streams, VOD files, and preview images to cloud storage providers. This ensures your media files are backed up, scalable, and accessible from anywhere.
+
+## Supported Storage Providers
+
+<CardGroup cols={2}>
+  <Card title="AWS S3" icon="aws" href="/storage/aws-s3">
+    Amazon S3 and S3-compatible storage services
+  </Card>
+  
+  <Card title="Google Cloud Storage" icon="google" href="/storage/google-cloud-storage">
+    Google Cloud Platform storage buckets
+  </Card>
+</CardGroup>
+
+## Key Features
+
+<AccordionGroup>
+  <Accordion title="Automatic Upload" icon="cloud-arrow-up">
+    Files are automatically uploaded to your configured storage as soon as recording completes. You can choose whether to delete local files after successful upload.
+  </Accordion>
+
+  <Accordion title="Flexible Permissions" icon="lock">
+    Configure file permissions (public-read, private, etc.) and cache control policies for uploaded files.
+  </Accordion>
+
+  <Accordion title="Storage Classes" icon="layer-group">
+    Choose appropriate storage classes (Standard, Glacier, etc. for S3) to optimize costs based on access patterns.
+  </Accordion>
+
+  <Accordion title="Progress Tracking" icon="chart-line">
+    Monitor upload progress with built-in progress listeners for large files.
+  </Accordion>
+</AccordionGroup>
+
+## Common Configuration
+
+All storage clients share these common configuration parameters:
+
+| Parameter | Description | Default |
+|-----------|-------------|----------|
+| `enabled` | Enable/disable storage integration | `false` |
+| `storageName` | Bucket name or storage container | - |
+| `accessKey` | Access key for authentication | - |
+| `secretKey` | Secret key for authentication | - |
+| `region` | Storage region (e.g., us-west-1) | - |
+| `endpoint` | Custom endpoint (optional, for S3-compatible services) | - |
+| `permission` | File permission/ACL | `public-read` |
+| `cacheControl` | Cache control header | `no-store, no-cache, must-revalidate, max-age=0` |
+| `storageClass` | Storage tier (e.g., STANDARD, GLACIER) | - |
+
+## Setup Process
+
+<Steps>
+  <Step title="Choose a Storage Provider">
+    Select the cloud storage provider that best fits your needs:
+    - **AWS S3**: Most popular, supports S3-compatible services
+    - **Google Cloud Storage**: Integrated with GCP ecosystem
+  </Step>
+
+  <Step title="Configure Credentials">
+    Set up access credentials in your storage provider's console and configure them in Ant Media Server.
+  </Step>
+
+  <Step title="Enable Storage">
+    Update your application configuration to enable the storage client and start automatic uploads.
+  </Step>
+
+  <Step title="Test Upload">
+    Perform a test recording to verify files are uploaded correctly.
+  </Step>
+</Steps>
+
+## Storage Operations
+
+The storage client provides these core operations:
+
+### Save Files
+```java
+// Save a file and optionally delete the local copy
+storageClient.save(key, file, deleteLocalFile);
+
+// Save from an input stream
+storageClient.save(key, inputStream, waitForCompletion);
+```
+
+### Delete Files
+```java
+// Delete a single file
+storageClient.delete(key);
+
+// Delete multiple files matching a pattern
+storageClient.deleteMultipleFiles(key, regex);
+```
+
+### Check File Existence
+```java
+// Check if a file exists
+boolean exists = storageClient.fileExist(key);
+```
+
+### Retrieve Files
+```java
+// Get file as input stream
+InputStream stream = storageClient.get(key);
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configure AWS S3" icon="aws" href="/storage/aws-s3">
+    Set up Amazon S3 or S3-compatible storage
+  </Card>
+  
+  <Card title="Configure Google Cloud" icon="google" href="/storage/google-cloud-storage">
+    Set up Google Cloud Storage integration
+  </Card>
+</CardGroup>
+
+<Note>
+  **Best Practice**: Always test your storage configuration with a small file before enabling it in production.
+</Note>

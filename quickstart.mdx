@@ -1,80 +1,195 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get started with Ant Media Server in minutes. Install, configure, and stream your first live video with WebRTC, RTMP, or HLS.
 ---
 
-## Get started in three steps
+Ant Media Server is an ultra-low latency live streaming engine that supports WebRTC (~0.5s latency), RTMP, RTSP, HLS, and SRT protocols. This guide will help you get started quickly.
 
-Get your documentation site running locally and make your first customization.
+<Steps>
+  <Step title="Install Ant Media Server">
+    Download and install Ant Media Server on your Linux system. The server requires Java 17 and runs on Ubuntu, CentOS, or other Linux distributions.
 
-### Step 1: Set up your local environment
+    For a quick installation on Linux, download the latest release:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```bash
+    wget https://github.com/ant-media/Ant-Media-Server/releases/latest/download/ant-media-server.zip
+    unzip ant-media-server.zip
+    cd ant-media-server
+    sudo bash install_ant-media-server.sh
+    ```
 
-### Step 2: Deploy your changes
+    <Note>
+      The default installation path is `/usr/local/antmedia`. The installer will create an `antmedia` user and configure the service to start automatically.
+    </Note>
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    Once installed, the server will start automatically. You can verify the installation by checking the service status:
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    ```bash
+    sudo systemctl status antmedia
+    ```
+  </Step>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+  <Step title="Access the web dashboard">
+    After installation, access the Ant Media Server web dashboard to manage your applications and streams.
 
-### Step 3: Go live
+    Open your browser and navigate to:
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    ```
+    http://your-server-ip:5080
+    ```
+
+    For HTTPS access (after SSL setup):
+
+    ```
+    https://your-server-ip:5443
+    ```
+
+    <Tip>
+      The default HTTP port is `5080` and HTTPS port is `5443`. These can be configured in `/usr/local/antmedia/conf/red5.properties`.
+    </Tip>
+
+    The dashboard provides access to:
+    - Application management
+    - Stream monitoring
+    - Server settings
+    - Live analytics
+  </Step>
+
+  <Step title="Create your first application">
+    Ant Media Server comes with pre-installed applications: `LiveApp`, `WebRTCApp`, and `live`. You can use these or create your own.
+
+    To create a new application using the REST API:
+
+    ```bash
+    curl -X POST "http://localhost:5080/rest/v2/applications/{appName}" \
+      -H "Content-Type: application/json"
+    ```
+
+    Or use the command-line script:
+
+    ```bash
+    cd /usr/local/antmedia
+    sudo ./create_app.sh -n myapp
+    ```
+
+    <Note>
+      Application names are case-sensitive. The database name will be automatically created in lowercase format.
+    </Note>
+
+    Each application includes:
+    - Independent configuration in `WEB-INF/red5-web.properties`
+    - Dedicated database (MapDB by default)
+    - Custom context path
+  </Step>
+
+  <Step title="Publish your first stream">
+    You can publish streams to Ant Media Server using multiple protocols:
+
+    <CodeGroup>
+      ```bash RTMP
+      # Using FFmpeg
+      ffmpeg -re -i input.mp4 -c:v libx264 -c:a aac \
+        -f flv rtmp://your-server-ip/LiveApp/stream1
+      
+      # Using OBS Studio
+      # Server: rtmp://your-server-ip/LiveApp
+      # Stream Key: stream1
+      ```
+
+      ```bash SRT
+      # Using FFmpeg with SRT
+      ffmpeg -re -i input.mp4 -c copy \
+        -f mpegts "srt://your-server-ip:4200?streamid=stream1"
+      ```
+
+      ```javascript WebRTC
+      // Using the WebRTC SDK
+      const webRTCAdaptor = new WebRTCAdaptor({
+        websocket_url: "wss://your-server-ip:5443/LiveApp/websocket",
+        mediaConstraints: {
+          video: true,
+          audio: true
+        },
+        callback: (info, obj) => {
+          if (info === "initialized") {
+            webRTCAdaptor.publish("stream1");
+          }
+        }
+      });
+      ```
+    </CodeGroup>
+
+    <Tip>
+      For WebRTC publishing, you'll need to use HTTPS. See the [installation guide](/deployment/ssl-setup) for SSL setup instructions.
+    </Tip>
+  </Step>
+
+  <Step title="Play your stream">
+    Once you're publishing, you can play the stream using different protocols:
+
+    <CodeGroup>
+      ```html WebRTC (Ultra-low latency)
+      <!-- ~0.5 second latency -->
+      <video id="remoteVideo" autoplay controls></video>
+      <script>
+        const webRTCAdaptor = new WebRTCAdaptor({
+          websocket_url: "wss://your-server-ip:5443/LiveApp/websocket",
+          remoteVideoId: "remoteVideo",
+          callback: (info, obj) => {
+            if (info === "initialized") {
+              webRTCAdaptor.play("stream1");
+            }
+          }
+        });
+      </script>
+      ```
+
+      ```html HLS
+      <!-- 6-10 second latency -->
+      <video controls>
+        <source src="http://your-server-ip:5080/LiveApp/streams/stream1.m3u8" 
+                type="application/x-mpegURL">
+      </video>
+      ```
+
+      ```bash RTMP
+      # Using FFplay
+      ffplay rtmp://your-server-ip/LiveApp/stream1
+      
+      # Using VLC
+      vlc rtmp://your-server-ip/LiveApp/stream1
+      ```
+    </CodeGroup>
+
+    <Warning>
+      HLS streams may take 10-15 seconds to start as segments need to be generated. WebRTC provides instant playback with sub-second latency.
+    </Warning>
+  </Step>
+</Steps>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
+Now that you have Ant Media Server running:
+
+- [Configure SSL certificates](/deployment/ssl-setup) for production use
+- [Set up adaptive bitrate streaming](https://antmedia.io/docs) for better quality
+- [Enable cluster mode](/features/clustering) for scaling
+- [Explore the REST API](https://antmedia.io/docs) for automation
+- [Configure authentication](https://antmedia.io/docs) to secure your streams
+
+## Getting help
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Documentation" icon="book" href="https://antmedia.io/docs">
+    Comprehensive guides and API references
+  </Card>
+  <Card title="Community Support" icon="users" href="https://github.com/orgs/ant-media/discussions">
+    Ask questions and share ideas
+  </Card>
+  <Card title="GitHub Issues" icon="github" href="https://github.com/ant-media/Ant-Media-Server/issues">
+    Report bugs and request features
+  </Card>
+  <Card title="Enterprise Support" icon="envelope" href="mailto:support@antmedia.io">
+    Get professional support for Enterprise Edition
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

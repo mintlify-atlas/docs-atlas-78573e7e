@@ -1,0 +1,348 @@
+---
+title: "JavaScript SDK"
+description: "WebRTC SDK for web browsers and JavaScript applications"
+---
+
+The Ant Media Server JavaScript SDK enables WebRTC streaming in web browsers. It provides a simple API for publishing and playing streams with ultra-low latency.
+
+## Installation
+
+### CDN
+
+Include the SDK directly in your HTML:
+
+```html
+<script src="https://your-server:5443/LiveApp/js/webrtc_adaptor.js"></script>
+```
+
+### NPM
+
+Install via npm for modern web applications:
+
+```bash
+npm install @ant-media/webrtc_adaptor
+```
+
+Then import in your JavaScript:
+
+```javascript
+import { WebRTCAdaptor } from '@ant-media/webrtc_adaptor';
+```
+
+## Basic Usage
+
+### Initialize the SDK
+
+Create a WebRTC adaptor instance:
+
+```javascript
+const webRTCAdaptor = new WebRTCAdaptor({
+  websocket_url: "wss://your-server:5443/WebRTCAppEE/websocket",
+  mediaConstraints: {
+    video: true,
+    audio: true
+  },
+  peerconnection_config: {
+    iceServers: [{urls: "stun:stun1.l.google.com:19302"}]
+  },
+  sdp_constraints: {
+    OfferToReceiveAudio: false,
+    OfferToReceiveVideo: false
+  },
+  localVideoId: "localVideo",
+  remoteVideoId: "remoteVideo",
+  callback: (info, obj) => {
+    if (info === "initialized") {
+      console.log("WebRTC adaptor initialized");
+    } else if (info === "publish_started") {
+      console.log("Publishing started");
+    } else if (info === "publish_finished") {
+      console.log("Publishing finished");
+    }
+  },
+  callbackError: (error, message) => {
+    console.error("Error:", error, message);
+  }
+});
+```
+
+### Publishing a Stream
+
+Publish video/audio from the user's camera and microphone:
+
+<CodeGroup>
+
+```javascript Basic Publish
+// Start publishing with a stream ID
+const streamId = "myStream123";
+webRTCAdaptor.publish(streamId);
+```
+
+```javascript With Token
+// Publish with authentication token
+const streamId = "myStream123";
+const token = "your-publish-token";
+webRTCAdaptor.publish(streamId, token);
+```
+
+```javascript Custom Constraints
+// Publish with custom video constraints
+webRTCAdaptor.mediaConstraints = {
+  video: {
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+    frameRate: { ideal: 30 }
+  },
+  audio: true
+};
+webRTCAdaptor.publish(streamId);
+```
+
+</CodeGroup>
+
+### Playing a Stream
+
+Play an existing stream:
+
+<CodeGroup>
+
+```javascript Basic Play
+// Play a stream by ID
+const streamId = "myStream123";
+webRTCAdaptor.play(streamId);
+```
+
+```javascript With Token
+// Play with authentication token
+const streamId = "myStream123";
+const token = "your-play-token";
+webRTCAdaptor.play(streamId, token);
+```
+
+```javascript With Room ID
+// Play a stream in a conference room
+const streamId = "myStream123";
+const roomId = "room456";
+webRTCAdaptor.play(streamId, token, roomId);
+```
+
+</CodeGroup>
+
+## Conference Room
+
+Join a multi-party conference room:
+
+```javascript
+const roomId = "conference-room-1";
+const streamId = "myStreamInRoom";
+
+// Join room and start publishing
+webRTCAdaptor.joinRoom(roomId, streamId);
+
+// Handle room events in callback
+callback: (info, obj) => {
+  if (info === "joinedTheRoom") {
+    console.log("Joined room:", obj.streamId);
+    
+    // Play other streams in the room
+    const streams = obj.streams;
+    streams.forEach(stream => {
+      webRTCAdaptor.play(stream);
+    });
+  } else if (info === "newStreamAvailable") {
+    console.log("New stream available:", obj.streamId);
+    webRTCAdaptor.play(obj.streamId);
+  }
+}
+```
+
+## Screen Sharing
+
+Share your screen instead of camera:
+
+```javascript
+// Enable screen sharing
+webRTCAdaptor.switchDesktopCapture(streamId);
+
+// Switch back to camera
+webRTCAdaptor.switchVideoCameraCapture(streamId, deviceId);
+```
+
+## Data Channels
+
+Send real-time data alongside video:
+
+```javascript
+// Send data to all viewers
+const data = {
+  message: "Hello viewers!",
+  timestamp: Date.now()
+};
+webRTCAdaptor.sendData(streamId, JSON.stringify(data));
+
+// Receive data in callback
+callback: (info, obj) => {
+  if (info === "data_received") {
+    const receivedData = JSON.parse(obj.data);
+    console.log("Received:", receivedData);
+  }
+}
+```
+
+## Configuration Options
+
+### Media Constraints
+
+Customize video and audio capture:
+
+```javascript
+mediaConstraints: {
+  video: {
+    width: { min: 640, ideal: 1280, max: 1920 },
+    height: { min: 480, ideal: 720, max: 1080 },
+    frameRate: { ideal: 30, max: 60 },
+    facingMode: "user" // or "environment" for back camera
+  },
+  audio: {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true
+  }
+}
+```
+
+### ICE Servers
+
+Configure STUN/TURN servers for NAT traversal:
+
+```javascript
+peerconnection_config: {
+  iceServers: [
+    { urls: "stun:stun1.l.google.com:19302" },
+    {
+      urls: "turn:your-turn-server:3478",
+      username: "turnuser",
+      credential: "turnpassword"
+    }
+  ]
+}
+```
+
+## Event Callbacks
+
+Handle SDK events:
+
+```javascript
+callback: (info, obj) => {
+  switch(info) {
+    case "initialized":
+      console.log("SDK initialized");
+      break;
+    case "publish_started":
+      console.log("Stream started:", obj.streamId);
+      break;
+    case "publish_finished":
+      console.log("Stream stopped:", obj.streamId);
+      break;
+    case "play_started":
+      console.log("Playback started:", obj.streamId);
+      break;
+    case "play_finished":
+      console.log("Playback stopped:", obj.streamId);
+      break;
+    case "data_received":
+      console.log("Data received:", obj.data);
+      break;
+  }
+},
+callbackError: (error, message) => {
+  console.error("Error:", error, message);
+}
+```
+
+## Stop Publishing/Playing
+
+Stop streams when done:
+
+```javascript
+// Stop publishing
+webRTCAdaptor.stop(streamId);
+
+// Leave conference room
+webRTCAdaptor.leaveFromRoom(roomId);
+
+// Close all connections
+webRTCAdaptor.closeWebSocket();
+```
+
+## Sample Application
+
+View the complete sample application:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Ant Media WebRTC</title>
+</head>
+<body>
+  <video id="localVideo" autoplay muted></video>
+  <video id="remoteVideo" autoplay></video>
+  
+  <button onclick="startPublishing()">Start Publishing</button>
+  <button onclick="startPlaying()">Start Playing</button>
+  
+  <script src="https://your-server:5443/LiveApp/js/webrtc_adaptor.js"></script>
+  <script>
+    const webRTCAdaptor = new WebRTCAdaptor({
+      websocket_url: "wss://your-server:5443/LiveApp/websocket",
+      mediaConstraints: { video: true, audio: true },
+      localVideoId: "localVideo",
+      remoteVideoId: "remoteVideo",
+      callback: (info) => console.log(info),
+      callbackError: (error) => console.error(error)
+    });
+    
+    function startPublishing() {
+      webRTCAdaptor.publish("stream1");
+    }
+    
+    function startPlaying() {
+      webRTCAdaptor.play("stream1");
+    }
+  </script>
+</body>
+</html>
+```
+
+## Resources
+
+<Card title="JavaScript SDK Repository" icon="github" href="https://github.com/ant-media/StreamApp">
+  View source code, examples, and contribute on GitHub
+</Card>
+
+## Browser Compatibility
+
+The JavaScript SDK supports all modern browsers with WebRTC:
+
+- Chrome 74+
+- Firefox 66+
+- Safari 12.1+
+- Edge 79+
+- Opera 62+
+
+<Note>
+  WebRTC requires HTTPS in production. Localhost works with HTTP for development only.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="REST API" icon="code" href="/api/overview">
+    Control streams with the REST API
+  </Card>
+  
+  <Card title="Authentication" icon="shield-halved" href="/security/authentication">
+    Secure your streams with tokens
+  </Card>
+</CardGroup>

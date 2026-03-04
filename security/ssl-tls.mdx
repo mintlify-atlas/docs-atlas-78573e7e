@@ -1,0 +1,471 @@
+---
+title: SSL/TLS Configuration
+description: Enable SSL/TLS encryption for secure HTTPS and WSS connections in Ant Media Server
+---
+
+## Overview
+
+SSL/TLS encryption is essential for securing Ant Media Server communications. It protects:
+- REST API credentials and tokens
+- WebRTC signaling
+- HLS and DASH stream delivery
+- Management dashboard access
+
+Ant Media Server provides automated SSL configuration through the `SslConfigurator` class.
+
+## SSL Configuration Types
+
+The `SslConfigurator` (`security/SslConfigurator.java:12`) supports three configuration methods:
+
+### 1. Custom Domain with Let's Encrypt
+
+Automatically obtain SSL certificates from Let's Encrypt for your domain:
+
+```java
+SslConfigurationType type = SslConfigurationType.CUSTOM_DOMAIN;
+String command = "sudo /bin/bash enable_ssl.sh -d example.com -i /usr/local/antmedia";
+```
+
+### 2. Ant Media Subdomain
+
+Use a free subdomain provided by Ant Media Server:
+
+```java
+SslConfigurationType type = SslConfigurationType.ANTMEDIA_SUBDOMAIN;
+String command = "sudo /bin/bash enable_ssl.sh -i /usr/local/antmedia";
+```
+
+### 3. Custom Certificate
+
+Use your own SSL certificate files:
+
+```java
+SslConfigurationType type = SslConfigurationType.CUSTOM_CERTIFICATE;
+String command = "sudo /bin/bash enable_ssl.sh " +
+    "-f /path/to/fullchain.pem " +
+    "-p /path/to/privkey.pem " +
+    "-c /path/to/chain.pem " +
+    "-d example.com " +
+    "-i /usr/local/antmedia";
+```
+
+See `security/SslConfigurator.java:22-43` for the implementation.
+
+## Enabling SSL via Web Interface
+
+### Using Dashboard
+
+1. Navigate to Settings > SSL Certificate
+2. Choose configuration type:
+   - **Let's Encrypt**: Enter your domain name
+   - **Custom Certificate**: Upload certificate files
+3. Click Enable SSL
+4. Wait for certificate installation
+5. Server will restart automatically
+
+## Enabling SSL via Command Line
+
+### Let's Encrypt with Custom Domain
+
+Requirements:
+- Domain name pointing to your server's IP
+- Port 80 and 443 accessible
+- Valid email address
+
+```bash
+cd /usr/local/antmedia
+sudo ./enable_ssl.sh -d yourdomain.com
+```
+
+### Ant Media Subdomain
+
+Get a free `{servername}.antmedia.cloud` subdomain:
+
+```bash
+cd /usr/local/antmedia
+sudo ./enable_ssl.sh
+```
+
+The script will:
+1. Register your server
+2. Create a subdomain
+3. Obtain SSL certificate
+4. Configure Ant Media Server
+
+### Custom Certificate
+
+Use your existing SSL certificates:
+
+```bash
+cd /usr/local/antmedia
+sudo ./enable_ssl.sh \
+  -f /path/to/fullchain.pem \
+  -p /path/to/privkey.pem \
+  -c /path/to/chain.pem \
+  -d yourdomain.com
+```
+
+Required files:
+- **fullchain.pem**: Full certificate chain
+- **privkey.pem**: Private key
+- **chain.pem**: Intermediate certificates
+
+## Certificate Components
+
+The `SslConfigurator` requires specific certificate files:
+
+### Full Chain File
+
+```java
+private File fullChainFile;
+
+public void setFullChainFile(File fullChainFile) {
+    this.fullChainFile = fullChainFile;
+}
+```
+
+Contains:
+- Your domain certificate
+- Intermediate certificates
+- Root certificate
+
+### Private Key File
+
+```java
+private File privateKeyFile;
+
+public void setPrivateKeyFile(File privateKeyFile) {
+    this.privateKeyFile = privateKeyFile;
+}
+```
+
+Your domain's private key. **Keep this file secure!**
+
+### Chain File
+
+```java
+private File chainFile;
+
+public void setChainFile(File chainFile) {
+    this.chainFile = chainFile;
+}
+```
+
+Intermediate and root certificates.
+
+See `security/SslConfigurator.java:53-63` for setters.
+
+## SSL Configuration Process
+
+The `getCommand()` method (`security/SslConfigurator.java:22-43`) generates the appropriate command:
+
+```java
+public String getCommand() {
+    logger.info("SSL configuration with configuration type {} has started.", this.type);
+    
+    String installDirectory = Paths.get("").toAbsolutePath().toString();
+    
+    switch (type) {
+        case CUSTOM_DOMAIN:
+            return "sudo /bin/bash enable_ssl.sh -d " + domain + " -i " + installDirectory;
+            
+        case ANTMEDIA_SUBDOMAIN:
+            return "sudo /bin/bash enable_ssl.sh -i " + installDirectory;
+            
+        case CUSTOM_CERTIFICATE:
+            return "sudo /bin/bash enable_ssl.sh " +
+                   "-f " + fullChainFile.getAbsolutePath() +
+                   "-p " + privateKeyFile.getAbsolutePath() +
+                   "-c " + chainFile.getAbsolutePath() +
+                   "-d " + domain +
+                   "-i " + installDirectory;
+            
+        default:
+            logger.warn("No SSL configuration type. SSL configuration failed.");
+            return null;
+    }
+}
+```
+
+## Verifying SSL Installation
+
+### Check HTTPS Access
+
+Test the dashboard:
+
+```bash
+curl -I https://yourdomain.com:5443
+```
+
+Expected response:
+```
+HTTP/1.1 200 OK
+...
+```
+
+### Check WSS WebSocket
+
+Test WebRTC signaling:
+
+```bash
+wscat -c wss://yourdomain.com:5443/WebRTCAppEE/websocket
+```
+
+### Verify Certificate Details
+
+```bash
+openssl s_client -connect yourdomain.com:5443 -servername yourdomain.com
+```
+
+Check:
+- Certificate chain is complete
+- Certificate is not expired
+- Common Name (CN) matches your domain
+- No certificate errors
+
+### Browser Verification
+
+1. Open `https://yourdomain.com:5443`
+2. Click the padlock icon
+3. Verify:
+   - Connection is secure
+   - Certificate is valid
+   - Issued to your domain
+
+## Certificate Renewal
+
+### Automatic Renewal (Let's Encrypt)
+
+Let's Encrypt certificates expire after 90 days. Ant Media Server sets up automatic renewal:
+
+```bash
+# Check renewal cron job
+sudo crontab -l | grep certbot
+```
+
+Manual renewal:
+
+```bash
+sudo certbot renew
+sudo systemctl restart antmedia
+```
+
+### Custom Certificate Renewal
+
+For custom certificates:
+
+1. Obtain new certificate from your CA
+2. Run SSL configuration again:
+```bash
+sudo ./enable_ssl.sh \
+  -f /path/to/new/fullchain.pem \
+  -p /path/to/new/privkey.pem \
+  -c /path/to/new/chain.pem \
+  -d yourdomain.com
+```
+3. Restart Ant Media Server
+
+## Ports and Firewall
+
+### Required Ports
+
+| Port | Protocol | Purpose |
+|------|----------|----------|
+| 443 | TCP | HTTPS (for Let's Encrypt validation) |
+| 5443 | TCP | Ant Media Server HTTPS/WSS |
+| 80 | TCP | HTTP redirect (optional) |
+
+### Firewall Configuration
+
+#### UFW (Ubuntu)
+
+```bash
+sudo ufw allow 443/tcp
+sudo ufw allow 5443/tcp
+sudo ufw allow 80/tcp
+sudo ufw reload
+```
+
+#### iptables
+
+```bash
+sudo iptables -A INPUT -p tcp --dport 443 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 5443 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+sudo iptables-save > /etc/iptables/rules.v4
+```
+
+#### firewalld (CentOS/RHEL)
+
+```bash
+sudo firewall-cmd --permanent --add-port=443/tcp
+sudo firewall-cmd --permanent --add-port=5443/tcp
+sudo firewall-cmd --permanent --add-port=80/tcp
+sudo firewall-cmd --reload
+```
+
+## Security Best Practices
+
+<Warning>
+  Always use SSL/TLS in production environments. Unencrypted connections expose sensitive data including authentication tokens and stream content.
+</Warning>
+
+<Warning>
+  Protect your private key file with strict permissions (chmod 600). Never commit private keys to version control or share them publicly.
+</Warning>
+
+<Warning>
+  Use strong cipher suites and disable older protocols like SSLv3 and TLS 1.0. Modern browsers require TLS 1.2 or higher.
+</Warning>
+
+<Warning>
+  Monitor certificate expiration dates and set up renewal alerts. Expired certificates will break all HTTPS/WSS connections.
+</Warning>
+
+<Warning>
+  Use Certificate Transparency monitoring to detect unauthorized certificate issuance for your domain.
+</Warning>
+
+## Troubleshooting
+
+### Certificate Installation Failed
+
+Common issues:
+
+1. **Port 80/443 not accessible**
+   - Check firewall rules
+   - Verify no other service is using these ports
+   - Ensure domain points to server IP
+
+2. **Domain validation failed**
+   - Verify DNS A record points to server
+   - Wait for DNS propagation (up to 48 hours)
+   - Check domain is not behind CDN/proxy
+
+3. **Permission denied**
+   - Run script with sudo
+   - Check file permissions on certificate directory
+
+### Certificate Not Trusted
+
+1. **Chain incomplete**
+   - Include all intermediate certificates
+   - Use full chain file, not just domain certificate
+
+2. **Wrong certificate for domain**
+   - Verify Common Name matches domain
+   - Check Subject Alternative Names
+
+3. **Certificate expired**
+   - Renew certificate
+   - Check system time is correct
+
+### Mixed Content Warnings
+
+When embedding players:
+
+```html
+<!-- Wrong: HTTP resource on HTTPS page -->
+<script src="http://example.com/player.js"></script>
+
+<!-- Correct: Use HTTPS -->
+<script src="https://example.com/player.js"></script>
+```
+
+All resources must use HTTPS when page is served over HTTPS.
+
+### WebRTC Connection Fails
+
+1. **Certificate validation failed**
+   - Browser doesn't trust certificate
+   - Install intermediate certificates
+
+2. **WSS connection refused**
+   - Check port 5443 is open
+   - Verify WebSocket is using wss:// not ws://
+
+3. **STUN/TURN over TLS**
+   - Configure TURN server with TLS
+   - Use port 443 for TURN-TLS
+
+## Using with WebRTC
+
+### JavaScript Client
+
+Update WebSocket URL to use WSS:
+
+```javascript
+const webRTCAdaptor = new WebRTCAdaptor({
+    websocket_url: "wss://yourdomain.com:5443/LiveApp/websocket",
+    mediaConstraints: {
+        video: true,
+        audio: true
+    },
+    // ... other options
+});
+```
+
+### Mobile SDKs
+
+#### Android
+
+```java
+String websocketUrl = "wss://yourdomain.com:5443/LiveApp/websocket";
+webRTCClient.setWsUrl(websocketUrl);
+```
+
+#### iOS
+
+```swift
+let websocketUrl = "wss://yourdomain.com:5443/LiveApp/websocket"
+webRTCClient.setWebSocketUrl(websocketUrl)
+```
+
+## Advanced Configuration
+
+### Custom SSL Settings
+
+Edit Ant Media Server configuration:
+
+```bash
+vi /usr/local/antmedia/conf/jee-container.xml
+```
+
+Update SSL connector:
+
+```xml
+<Connector port="5443" protocol="HTTP/1.1" SSLEnabled="true"
+    maxThreads="150" scheme="https" secure="true"
+    clientAuth="false" sslProtocol="TLS"
+    sslEnabledProtocols="TLSv1.2,TLSv1.3"
+    ciphers="TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,..."
+    keystoreFile="/path/to/keystore.jks"
+    keystorePass="password" />
+```
+
+### HSTS (HTTP Strict Transport Security)
+
+Force HTTPS for all connections:
+
+```bash
+# Add to web.xml
+<filter>
+    <filter-name>HSTSFilter</filter-name>
+    <filter-class>org.apache.catalina.filters.HttpHeaderSecurityFilter</filter-class>
+    <init-param>
+        <param-name>hstsEnabled</param-name>
+        <param-value>true</param-value>
+    </init-param>
+    <init-param>
+        <param-name>hstsMaxAgeSeconds</param-name>
+        <param-value>31536000</param-value>
+    </init-param>
+</filter>
+```
+
+## Next Steps
+
+- [IP Filtering](/security/ip-filtering) - Restrict access by IP address
+- [JWT Tokens](/security/jwt-tokens) - Implement token authentication
+- [Authentication Overview](/security/authentication) - Learn about all security methods
+- [Token-Based Access](/security/token-based-access) - Secure streams with tokens

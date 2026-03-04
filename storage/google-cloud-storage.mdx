@@ -1,0 +1,475 @@
+---
+title: "Google Cloud Storage"
+description: "Configure Google Cloud Storage for automatic media file uploads"
+---
+
+## Overview
+
+The Google Cloud Storage (GCS) client enables automatic upload of recorded streams, VOD files, and preview images to Google Cloud Platform storage buckets.
+
+## Features
+
+<CardGroup cols={2}>
+  <Card title="GCP Integration" icon="google">
+    Native integration with Google Cloud Platform
+  </Card>
+  
+  <Card title="Automatic Upload" icon="cloud-arrow-up">
+    Seamless upload of recordings to GCS buckets
+  </Card>
+  
+  <Card title="Simple Setup" icon="gear">
+    Easy configuration using default credentials
+  </Card>
+  
+  <Card title="File Management" icon="folder-tree">
+    Upload, delete, and check file existence
+  </Card>
+</CardGroup>
+
+## Configuration
+
+### Spring Bean Configuration
+
+Add the GCS storage client bean to your application's `red5-web.xml`:
+
+```xml
+<bean id="app.storageClient" class="io.antmedia.storage.GCPStorageClient">
+  <property name="enabled" value="true" />
+  <property name="storageName" value="your-bucket-name" />
+</bean>
+```
+
+<Note>
+  **Authentication**: GCS uses Application Default Credentials (ADC). No need to configure access keys explicitly.
+</Note>
+
+## Configuration Parameters
+
+| Parameter | Type | Description | Required | Default |
+|-----------|------|-------------|----------|----------|
+| `enabled` | boolean | Enable GCS storage integration | Yes | `false` |
+| `storageName` | string | GCS bucket name | Yes | - |
+| `cacheControl` | string | Cache-Control header value | No | `no-store, no-cache, must-revalidate, max-age=0` |
+
+## Authentication Setup
+
+### Application Default Credentials (ADC)
+
+Google Cloud Storage uses Application Default Credentials. Set up authentication using one of these methods:
+
+#### Option 1: Service Account Key (Development)
+
+<Steps>
+  <Step title="Create Service Account">
+    In Google Cloud Console, go to **IAM & Admin > Service Accounts** and create a new service account.
+  </Step>
+
+  <Step title="Download Key File">
+    Create and download a JSON key file for the service account.
+  </Step>
+
+  <Step title="Set Environment Variable">
+    Set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable:
+    ```bash
+    export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account-key.json"
+    ```
+  </Step>
+
+  <Step title="Restart Ant Media Server">
+    Restart the server to pick up the new credentials.
+  </Step>
+</Steps>
+
+#### Option 2: Compute Engine Service Account (Production)
+
+<Steps>
+  <Step title="Attach Service Account">
+    When creating your GCE instance, attach a service account with Storage permissions.
+  </Step>
+
+  <Step title="Configure Permissions">
+    Ensure the service account has the necessary roles (see below).
+  </Step>
+
+  <Step title="No Additional Setup">
+    No environment variables needed - credentials are automatically available.
+  </Step>
+</Steps>
+
+#### Option 3: Google Kubernetes Engine (GKE)
+
+Use Workload Identity to authenticate from GKE:
+
+```bash
+# Create service account
+gcloud iam service-accounts create ant-media-storage
+
+# Grant storage permissions
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member "serviceAccount:ant-media-storage@PROJECT_ID.iam.gserviceaccount.com" \
+  --role "roles/storage.objectAdmin"
+
+# Bind to Kubernetes service account
+gcloud iam service-accounts add-iam-policy-binding \
+  ant-media-storage@PROJECT_ID.iam.gserviceaccount.com \
+  --role roles/iam.workloadIdentityUser \
+  --member "serviceAccount:PROJECT_ID.svc.id.goog[NAMESPACE/KSA_NAME]"
+```
+
+## Required IAM Roles
+
+### Recommended Role
+
+The simplest approach is to use the **Storage Object Admin** role:
+
+```bash
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member "serviceAccount:SERVICE_ACCOUNT_EMAIL" \
+  --role "roles/storage.objectAdmin"
+```
+
+### Custom Role (Least Privilege)
+
+For better security, create a custom role with minimal permissions:
+
+```bash
+# Create custom role
+gcloud iam roles create AntMediaStorage --project=PROJECT_ID \
+  --title="Ant Media Storage" \
+  --description="Permissions for Ant Media Server storage operations" \
+  --permissions="storage.objects.create,storage.objects.delete,storage.objects.get,storage.objects.list"
+
+# Assign to service account
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member "serviceAccount:SERVICE_ACCOUNT_EMAIL" \
+  --role "projects/PROJECT_ID/roles/AntMediaStorage"
+```
+
+Required permissions:
+- `storage.objects.create` - Upload files
+- `storage.objects.delete` - Delete files
+- `storage.objects.get` - Check existence and retrieve files
+- `storage.objects.list` - List objects (for future features)
+
+## GCS Bucket Setup
+
+### Create a Bucket
+
+```bash
+# Create bucket
+gsutil mb -l US-EAST1 gs://your-bucket-name/
+
+# Optional: Set bucket lifecycle policy
+gsutil lifecycle set lifecycle.json gs://your-bucket-name/
+```
+
+### Configure Bucket Permissions
+
+For public access to uploaded files:
+
+```bash
+# Make bucket publicly readable (if needed)
+gsutil iam ch allUsers:objectViewer gs://your-bucket-name/
+```
+
+For private files, skip the public access configuration.
+
+### Bucket Lifecycle Policy (Optional)
+
+Create `lifecycle.json` to automatically transition or delete old files:
+
+```json
+{
+  "lifecycle": {
+    "rule": [
+      {
+        "action": {
+          "type": "SetStorageClass",
+          "storageClass": "NEARLINE"
+        },
+        "condition": {
+          "age": 30,
+          "matchesPrefix": ["recordings/"]
+        }
+      },
+      {
+        "action": {
+          "type": "Delete"
+        },
+        "condition": {
+          "age": 365
+        }
+      }
+    ]
+  }
+}
+```
+
+## Storage Classes
+
+GCS offers multiple storage classes for cost optimization:
+
+| Class | Use Case | Availability |
+|-------|----------|-------------|
+| **Standard** | Frequently accessed data | >99.99% |
+| **Nearline** | Access < once per month | 99.95% |
+| **Coldline** | Access < once per quarter | 99.95% |
+| **Archive** | Long-term archive, < once per year | 99.95% |
+
+<Note>
+  **Storage Class**: The current GCS client implementation doesn't support setting storage class during upload. Use bucket default storage class or lifecycle policies.
+</Note>
+
+## File Operations
+
+### Upload Files
+
+```java
+// Upload file and delete local copy
+storageClient.save("recordings/stream123.mp4", file, true);
+
+// Upload file and keep local copy
+storageClient.save("recordings/stream123.mp4", file, false);
+
+// Upload from input stream
+storageClient.save("recordings/stream123.mp4", inputStream, false);
+```
+
+### Delete Files
+
+```java
+// Delete single file
+storageClient.delete("recordings/stream123.mp4");
+```
+
+<Warning>
+  **Not Implemented**: Bulk delete (`deleteMultipleFiles`) is not currently implemented for GCS. Use single delete operations or implement custom logic.
+</Warning>
+
+### Check File Existence
+
+```java
+boolean exists = storageClient.fileExist("recordings/stream123.mp4");
+```
+
+### Retrieve Files
+
+The base `get()` method is not currently implemented in the GCS client. To retrieve files, use the GCS API directly:
+
+```java
+import com.google.cloud.storage.Blob;
+import com.google.cloud.storage.Storage;
+import com.google.cloud.storage.StorageOptions;
+
+Storage storage = StorageOptions.getDefaultInstance().getService();
+Blob blob = storage.get("bucket-name", "recordings/stream123.mp4");
+byte[] content = blob.getContent();
+```
+
+## Complete Configuration Example
+
+### red5-web.xml
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                           http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+  <!-- Other beans... -->
+
+  <!-- GCS Storage Configuration -->
+  <bean id="app.storageClient" class="io.antmedia.storage.GCPStorageClient">
+    <property name="enabled" value="true" />
+    <property name="storageName" value="ant-media-recordings" />
+    <property name="cacheControl" value="public, max-age=3600" />
+  </bean>
+
+  <!-- Other beans... -->
+
+</beans>
+```
+
+### Environment Setup
+
+Add to `/usr/local/antmedia/antmedia` startup script:
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS="/opt/antmedia/gcp-service-account.json"
+```
+
+Or set system-wide in `/etc/environment`:
+
+```bash
+GOOGLE_APPLICATION_CREDENTIALS="/opt/antmedia/gcp-service-account.json"
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Authentication errors" icon="key">
+    **Symptoms**: `401 Unauthorized` or `403 Forbidden` errors
+
+    **Solutions**:
+    - Verify `GOOGLE_APPLICATION_CREDENTIALS` is set correctly
+    - Check service account has necessary permissions
+    - Ensure service account key file is readable
+    - Verify project ID in credentials matches bucket project
+  </Accordion>
+
+  <Accordion title="Bucket not found" icon="folder-open">
+    **Symptoms**: `404 Not Found` errors
+
+    **Solutions**:
+    - Verify bucket name in `storageName` is correct (case-sensitive)
+    - Check bucket exists: `gsutil ls gs://your-bucket-name/`
+    - Ensure service account has access to the bucket
+  </Accordion>
+
+  <Accordion title="Files not uploading" icon="cloud-xmark">
+    **Symptoms**: No errors but files don't appear in GCS
+
+    **Solutions**:
+    - Confirm `enabled` is set to `true`
+    - Check application logs for errors
+    - Verify network connectivity to `storage.googleapis.com`
+    - Test with a small file first
+  </Accordion>
+
+  <Accordion title="Slow uploads" icon="gauge">
+    **Symptoms**: Uploads take longer than expected
+
+    **Solutions**:
+    - Check network bandwidth and latency
+    - Choose a bucket region closer to your server
+    - Consider using Google Cloud CDN for distribution
+    - Monitor GCS quotas and limits
+  </Accordion>
+</AccordionGroup>
+
+## Implementation Differences
+
+### vs AWS S3
+
+Key differences from the S3 implementation:
+
+| Feature | S3 | GCS |
+|---------|-----|-----|
+| **Authentication** | Access/Secret keys or IAM | Application Default Credentials |
+| **Multipart Upload** | Yes, automatic >5MB | Handled by client library |
+| **Storage Classes** | Configurable per upload | Bucket default or lifecycle |
+| **Permissions/ACL** | Configurable (8 options) | Managed via IAM |
+| **Bulk Delete** | Supported with regex | Not implemented |
+| **Progress Tracking** | Full support | Basic support |
+| **Retrieve Files** | Implemented | Not implemented |
+
+### Current Limitations
+
+<Warning>
+  The GCS implementation has some limitations compared to S3:
+  - `deleteMultipleFiles()` throws `UnsupportedOperationException`
+  - `get()` method is not implemented (returns null)
+  - No storage class configuration per upload
+  - No ACL configuration per upload
+</Warning>
+
+## Advanced Usage
+
+### Custom Metadata
+
+To add custom metadata to uploaded files, you'll need to extend the `GCPStorageClient` class:
+
+```java
+public class CustomGCPStorageClient extends GCPStorageClient {
+    @Override
+    public void save(String key, File file, boolean deleteLocalFile) {
+        BlobInfo blobInfo = BlobInfo.newBuilder(getStorageName(), key)
+            .setMetadata(Map.of(
+                "contentType", "video/mp4",
+                "application", "ant-media-server"
+            ))
+            .build();
+        
+        try {
+            getGCPStorage().create(blobInfo, Files.readAllBytes(file.toPath()));
+        } catch (IOException e) {
+            logger.error("Upload failed", e);
+        }
+        
+        if (deleteLocalFile) {
+            deleteFile(file);
+        }
+    }
+}
+```
+
+### Monitoring and Logging
+
+Enable detailed logging for GCS operations:
+
+```xml
+<!-- logback.xml -->
+<logger name="io.antmedia.storage.GCPStorageClient" level="DEBUG" />
+<logger name="com.google.cloud.storage" level="INFO" />
+```
+
+## Security Best Practices
+
+<Steps>
+  <Step title="Use Service Accounts">
+    Always use service accounts, never personal user credentials.
+  </Step>
+
+  <Step title="Principle of Least Privilege">
+    Grant only required permissions (objectAdmin or custom role).
+  </Step>
+
+  <Step title="Rotate Keys Regularly">
+    If using key files, rotate them every 90 days.
+  </Step>
+
+  <Step title="Secure Key Storage">
+    Store service account keys securely with restricted file permissions:
+    ```bash
+    chmod 600 /opt/antmedia/gcp-service-account.json
+    chown antmedia:antmedia /opt/antmedia/gcp-service-account.json
+    ```
+  </Step>
+
+  <Step title="Use VPC Service Controls">
+    For sensitive data, use VPC Service Controls to restrict data exfiltration.
+  </Step>
+
+  <Step title="Enable Audit Logging">
+    Enable Cloud Audit Logs to track all storage access.
+  </Step>
+</Steps>
+
+## Performance Optimization
+
+### Regional Colocation
+
+Place your GCS bucket in the same region as your Ant Media Server:
+
+```bash
+# Server in us-east1, create bucket there
+gsutil mb -l us-east1 gs://ant-media-recordings/
+```
+
+### Network Optimization
+
+- Use Google Cloud VPC for private Google API access
+- Configure Private Google Access for subnet
+- Consider Cloud CDN for content delivery
+
+### Cost Optimization
+
+- Use lifecycle policies to transition old recordings to Nearline/Coldline
+- Set up object versioning with lifecycle deletion
+- Monitor storage costs in Cloud Billing
+
+<Note>
+  **Configuration File Location**: `red5-web.xml` is typically located at `/usr/local/antmedia/webapps/YourApp/WEB-INF/red5-web.xml`
+</Note>

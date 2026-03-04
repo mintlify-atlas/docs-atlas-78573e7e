@@ -1,0 +1,292 @@
+---
+title: "Server Settings"
+description: "Server-wide configuration parameters for Ant Media Server"
+---
+
+Server settings control the global behavior of Ant Media Server. These settings are stored in `<AMS_DIR>/conf/red5.properties` and apply to all applications.
+
+## Server Identity
+
+<ParamField path="serverName" type="string" default="null">
+  Fully Qualified Domain Name (FQDN) of the server.
+  
+  Used for:
+  - SSL certificate validation
+  - WebRTC ICE candidate replacement
+  - Cluster communication
+  
+  **Example:** `stream.example.com`
+</ParamField>
+
+<ParamField path="useGlobalIp" type="boolean" default="false">
+  Use global IP address instead of local IP, especially for cluster communication.
+</ParamField>
+
+<ParamField path="nodeGroup" type="string" default="default">
+  Node group identifier for organizing servers in a cluster.
+</ParamField>
+
+## Network Configuration
+
+### Port Settings
+
+<ParamField path="defaultHttpPort" type="int" default="5080">
+  Default HTTP port for the server.
+</ParamField>
+
+<ParamField path="originServerPort" type="int" default="5000">
+  Port opened by origin servers in cluster mode. Edge servers connect through this port.
+</ParamField>
+
+<ParamField path="rtmpPort" type="int" default="1935">
+  RTMP port for incoming RTMP connections.
+</ParamField>
+
+<ParamField path="srtPort" type="int" default="4200">
+  SRT port for incoming SRT connections.
+</ParamField>
+
+### SSL/TLS
+
+<ParamField path="sslEnabled" type="boolean" default="false">
+  Whether SSL/TLS is enabled on the server. Set automatically when SSL certificates are configured.
+</ParamField>
+
+<ParamField path="rtmpsEnabled" type="boolean" default="false">
+  Enable RTMPS (RTMP over SSL/TLS).
+</ParamField>
+
+### Proxy Configuration
+
+<ParamField path="proxyAddress" type="string" default="null">
+  Proxy IP address and port for license checking.
+  
+  Use this if there's a reverse proxy in front of Ant Media Server.
+  
+  **Format:** `<proxy_ip>:<port_number>`
+  
+  **Example:** `192.168.0.1:3012`
+</ParamField>
+
+## License Configuration
+
+<ParamField path="licenceKey" type="string" default="null">
+  Customer license key for Ant Media Server Enterprise Edition.
+</ParamField>
+
+<ParamField path="buildForMarket" type="boolean" default="false">
+  Whether this is a marketplace build. Set automatically based on license type.
+</ParamField>
+
+<ParamField path="marketplace" type="string" default="null">
+  Name of the marketplace (e.g., AWS, Azure, DigitalOcean).
+</ParamField>
+
+<ParamField path="offlineLicense" type="boolean" default="false">
+  Whether this is an offline license that checks against hardware. Set automatically based on license type.
+</ParamField>
+
+<ParamField path="localLicenceServerIps" type="string" default="null">
+  IP addresses of local license servers for offline license validation.
+</ParamField>
+
+## Logging
+
+<ParamField path="logLevel" type="string" default="INFO">
+  Application log level.
+  
+  **Options:**
+  - `ALL` - Log everything
+  - `TRACE` - Very detailed logging
+  - `DEBUG` - Debug information
+  - `INFO` - General information (default)
+  - `WARN` - Warnings only
+  - `ERROR` - Errors only
+  - `OFF` - No logging
+</ParamField>
+
+<ParamField path="nativeLogLevel" type="string" default="ERROR">
+  Log level for native libraries (FFmpeg and WebRTC).
+  
+  **Options:** Same as logLevel
+</ParamField>
+
+## Performance Monitoring
+
+<ParamField path="cpuMeasurementPeriodMs" type="int" default="1000">
+  Period in milliseconds for measuring CPU load.
+  
+  Used to determine if the server has sufficient CPU to handle new requests.
+</ParamField>
+
+<ParamField path="cpuMeasurementWindowSize" type="int" default="5">
+  Number of CPU measurements to keep for calculating average CPU load.
+</ParamField>
+
+## Heartbeat & Monitoring
+
+<ParamField path="heartbeatEnabled" type="boolean" default="true">
+  Enable heartbeat mechanism for server health monitoring.
+</ParamField>
+
+<ParamField path="serverStatusWebHookURL" type="string" default="null">
+  Webhook URL for server status notifications.
+  
+  Called for events such as:
+  - High resource usage
+  - Unexpected shutdown
+  - Critical errors
+</ParamField>
+
+## Access Control
+
+<ParamField path="allowedDashboardCIDR" type="string" default="0.0.0.0/0">
+  IP filter for accessing the Ant Media Server web panel.
+  
+  Must be in CIDR format. Multiple addresses can be comma-separated.
+  
+  **Examples:**
+  - `192.168.1.0/24` - Allow entire subnet
+  - `10.0.0.5/32` - Allow single IP
+  - `192.168.1.0/24,10.0.0.5/32` - Multiple ranges
+  - `0.0.0.0/0` - Allow all (default, not recommended for production)
+</ParamField>
+
+## JWT Authentication
+
+<ParamField path="jwtServerControlEnabled" type="boolean" default="false">
+  Enable JWT authentication for accessing the REST API and web panel.
+</ParamField>
+
+<ParamField path="jwtServerSecretKey" type="string" default="null">
+  JWT secret key for server-level authentication.
+  
+  Used to sign and validate JWT tokens for REST API and web panel access.
+</ParamField>
+
+<ParamField path="jwksURL" type="string" default="null">
+  JWKS (JSON Web Key Set) URL for JWT validation.
+  
+  If set, JWKS is used for validation instead of the secret key. Effective only if jwtServerControlEnabled is true.
+</ParamField>
+
+## SRT Configuration
+
+<ParamField path="appIngestsSrtStreamsWithoutStreamId" type="string" default="LiveApp">
+  Name of the application that ingests SRT streams without a stream ID.
+</ParamField>
+
+## Environment Variables
+
+The following environment variable can override server settings:
+
+<ParamField path="AMS_HOST_ADDRESS" type="env">
+  Override the host address detection.
+  
+  **Usage:**
+  ```bash
+  export AMS_HOST_ADDRESS=10.0.0.100
+  ```
+</ParamField>
+
+## Configuration File
+
+Server settings are stored in `/usr/local/antmedia/conf/red5.properties`:
+
+```properties
+# Server HTTP Port
+http.port=5080
+
+# Server Name (FQDN)
+server.name=stream.example.com
+
+# Log Level
+logLevel=INFO
+nativeLogLevel=ERROR
+
+# License Key
+server.licence_key=your-license-key-here
+
+# Dashboard Access Control
+server.allowed_dashboard_CIDR=192.168.1.0/24
+
+# JWT Authentication
+server.jwtServerControlEnabled=true
+server.jwtServerSecretKey=your-secret-key-here
+
+# Cluster Settings
+nodeGroup=production
+server.origin_port=5000
+
+# RTMP/SRT Ports
+rtmp.port=1935
+server.srt_port=4200
+
+# Monitoring
+server.heartbeatEnabled=true
+server.cpu_measurement_period_ms=1000
+server.cpu_measurement_window_size=5
+```
+
+## Best Practices
+
+### Security
+
+1. **Restrict dashboard access** - Use allowedDashboardCIDR to limit web panel access to trusted IPs
+2. **Enable JWT authentication** - Set jwtServerControlEnabled=true for production
+3. **Use strong secret keys** - Generate cryptographically secure keys for JWT secrets
+4. **Keep license key secure** - Don't commit license keys to version control
+
+### Performance
+
+1. **Monitor CPU usage** - Use cpuMeasurementPeriodMs and cpuMeasurementWindowSize for load balancing
+2. **Adjust log levels** - Use ERROR or WARN in production to reduce I/O overhead
+3. **Enable heartbeat** - Keep heartbeatEnabled=true for cluster health monitoring
+
+### Networking
+
+1. **Set serverName** - Always configure FQDN for SSL and WebRTC
+2. **Configure proxy** - Set proxyAddress if behind a reverse proxy
+3. **Use separate ports** - Keep default ports when possible, change only if conflicts exist
+
+### Clustering
+
+1. **Use node groups** - Organize servers by function (origin, edge, processing)
+2. **Configure origin port** - Ensure origin_port is accessible from edge servers
+3. **Enable global IP** - Set useGlobalIp=true for cloud deployments
+
+## Troubleshooting
+
+### Port Conflicts
+
+If default ports are already in use:
+
+```properties
+http.port=8080
+rtmp.port=11935
+server.srt_port=14200
+```
+
+### License Issues
+
+For license validation problems:
+
+1. Verify license key is correct
+2. Check server can reach license server (or use offline license)
+3. Configure proxy if needed: `proxy.address=192.168.1.1:3128`
+4. Review logs: `tail -f /usr/local/antmedia/log/ant-media-server.log`
+
+### Access Denied to Dashboard
+
+If unable to access web panel:
+
+1. Check allowedDashboardCIDR includes your IP
+2. Verify firewall allows connection to HTTP port
+3. Temporarily set to `0.0.0.0/0` for testing (not recommended for production)
+
+### Cluster Connection Issues
+
+1. Verify origin_port is open in firewall
+2. Check nodeGroup matches between origin and edge
+3. Ensure serverName or IP is reachable from edge nodes
+4. Review cluster communication logs

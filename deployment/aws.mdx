@@ -1,0 +1,520 @@
+---
+title: "AWS Deployment"
+description: "Deploy Ant Media Server on Amazon Web Services using EC2, Marketplace, and CloudFormation for scalable streaming infrastructure"
+---
+
+## Overview
+
+Ant Media Server can be deployed on Amazon Web Services (AWS) using multiple methods: EC2 instances with manual installation, AWS Marketplace one-click deployment, or automated CloudFormation templates for auto-scaling clusters.
+
+## Deployment Methods
+
+### AWS Marketplace (Recommended)
+
+The fastest way to deploy Ant Media Server on AWS is through the AWS Marketplace:
+
+- **Community Edition**: [AWS Marketplace Link](https://aws.amazon.com/marketplace/pp/prodview-okmynlgwgvq6w)
+- **Enterprise Edition**: [AWS Marketplace Link](https://aws.amazon.com/marketplace/pp/prodview-464ritgzkzod6)
+
+### Manual EC2 Installation
+
+Deploy on a standard EC2 instance using the Linux installation script.
+
+### CloudFormation Auto-Scaling
+
+Use CloudFormation templates to deploy a complete auto-scaling cluster in minutes.
+
+## EC2 Instance Requirements
+
+### Instance Types
+
+**Minimum Requirements (Testing/Development)**:
+- Instance Type: `t3.medium` or `t3a.medium`
+- vCPUs: 2
+- Memory: 4 GB
+- Network: Moderate bandwidth
+
+**Recommended for Production**:
+- Instance Type: `c5.xlarge`, `c5.2xlarge`, or `c6i.xlarge`
+- vCPUs: 4-8
+- Memory: 8-16 GB
+- Network: Up to 10 Gbps
+- Enhanced Networking: Enabled
+
+**High-Performance Streaming**:
+- Instance Type: `c5n.2xlarge`, `c6i.4xlarge`
+- vCPUs: 8-16
+- Memory: 16-32 GB
+- Network: 25-50 Gbps
+- EBS-Optimized: Yes
+
+### Operating System
+
+**Supported AMIs**:
+- Ubuntu Server 20.04 LTS (HVM)
+- Ubuntu Server 22.04 LTS (HVM)
+- Amazon Linux 2
+- Red Hat Enterprise Linux 8/9
+
+<Note>
+Ubuntu 20.04 LTS or 22.04 LTS is recommended for best compatibility.
+</Note>
+
+### Storage
+
+- **Root Volume**: 20 GB minimum (GP3 recommended)
+- **Additional Volume**: 50-500 GB for recorded streams (GP3 or io2)
+- **IOPS**: 3000+ IOPS for production workloads
+
+## Quick Start: AWS Marketplace Deployment
+
+<Steps>
+  <Step title="Access AWS Marketplace">
+    1. Log into your AWS Console
+    2. Navigate to AWS Marketplace
+    3. Search for "Ant Media Server"
+    4. Select Community or Enterprise Edition
+  </Step>
+
+  <Step title="Configure Instance">
+    Click **Continue to Subscribe** then **Continue to Configuration**:
+
+    - **Region**: Select your preferred AWS region
+    - **Software Version**: Latest version
+    - **Fulfillment Option**: CloudFormation or EC2
+  </Step>
+
+  <Step title="Launch Instance">
+    Configure launch parameters:
+
+    - **Instance Type**: c5.xlarge (or as needed)
+    - **VPC and Subnet**: Select or create
+    - **Security Group**: Configure or use default
+    - **Key Pair**: Select existing or create new
+  </Step>
+
+  <Step title="Access Web Panel">
+    Once the instance is running:
+
+    1. Get the public IP from EC2 dashboard
+    2. Open browser to `http://PUBLIC_IP:5080`
+    3. Create admin account on first access
+  </Step>
+</Steps>
+
+## Manual EC2 Installation
+
+<Steps>
+  <Step title="Launch EC2 Instance">
+    Create a new EC2 instance:
+
+    ```bash
+    # Using AWS CLI
+    aws ec2 run-instances \
+      --image-id ami-0557a15b87f6559cf \
+      --instance-type c5.xlarge \
+      --key-name your-key-pair \
+      --security-group-ids sg-xxxxxxxx \
+      --subnet-id subnet-xxxxxxxx \
+      --block-device-mappings '[{"DeviceName":"/dev/sda1","Ebs":{"VolumeSize":30,"VolumeType":"gp3"}}]' \
+      --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=AntMediaServer}]'
+    ```
+  </Step>
+
+  <Step title="Connect to Instance">
+    SSH into your instance:
+
+    ```bash
+    ssh -i your-key.pem ubuntu@YOUR_INSTANCE_PUBLIC_IP
+    ```
+  </Step>
+
+  <Step title="Install Ant Media Server">
+    Download and run the installation script:
+
+    ```bash
+    wget https://raw.githubusercontent.com/ant-media/Scripts/master/install_ant-media-server.sh
+    chmod +x install_ant-media-server.sh
+    sudo ./install_ant-media-server.sh
+    ```
+  </Step>
+
+  <Step title="Verify Installation">
+    Check if the service is running:
+
+    ```bash
+    sudo systemctl status antmedia
+    ```
+
+    Access the web panel at `http://YOUR_INSTANCE_PUBLIC_IP:5080`
+  </Step>
+</Steps>
+
+## Security Group Configuration
+
+### Required Inbound Rules
+
+Create a security group with the following inbound rules:
+
+| Type | Protocol | Port Range | Source | Description |
+|------|----------|------------|--------|-------------|
+| HTTP | TCP | 5080 | 0.0.0.0/0 | Web Panel HTTP |
+| HTTPS | TCP | 5443 | 0.0.0.0/0 | Web Panel HTTPS |
+| Custom TCP | TCP | 1935 | 0.0.0.0/0 | RTMP |
+| Custom TCP | TCP | 8443 | 0.0.0.0/0 | RTMPS (if SSL enabled) |
+| Custom UDP | UDP | 5000-65000 | 0.0.0.0/0 | WebRTC Media |
+| SSH | TCP | 22 | Your IP | SSH Access |
+
+### Using AWS CLI
+
+```bash
+# Create security group
+aws ec2 create-security-group \
+  --group-name antmedia-sg \
+  --description "Ant Media Server Security Group" \
+  --vpc-id vpc-xxxxxxxx
+
+# Add rules
+aws ec2 authorize-security-group-ingress --group-id sg-xxxxxxxx --protocol tcp --port 5080 --cidr 0.0.0.0/0
+aws ec2 authorize-security-group-ingress --group-id sg-xxxxxxxx --protocol tcp --port 5443 --cidr 0.0.0.0/0
+aws ec2 authorize-security-group-ingress --group-id sg-xxxxxxxx --protocol tcp --port 1935 --cidr 0.0.0.0/0
+aws ec2 authorize-security-group-ingress --group-id sg-xxxxxxxx --protocol udp --port 5000-65000 --cidr 0.0.0.0/0
+aws ec2 authorize-security-group-ingress --group-id sg-xxxxxxxx --protocol tcp --port 22 --cidr YOUR_IP/32
+```
+
+<Warning>
+For production, restrict port 22 (SSH) to specific IP addresses only. Avoid using 0.0.0.0/0 for SSH access.
+</Warning>
+
+## Elastic IP Configuration
+
+Assign an Elastic IP for a static public IP address:
+
+```bash
+# Allocate Elastic IP
+aws ec2 allocate-address --domain vpc
+
+# Associate with instance
+aws ec2 associate-address \
+  --instance-id i-xxxxxxxx \
+  --allocation-id eipalloc-xxxxxxxx
+```
+
+### Configure Server Name
+
+Update the server configuration with your Elastic IP or domain:
+
+```bash
+sudo nano /usr/local/antmedia/conf/red5.properties
+```
+
+Set:
+```properties
+server.name=YOUR_ELASTIC_IP_OR_DOMAIN
+```
+
+Restart the service:
+```bash
+sudo systemctl restart antmedia
+```
+
+## CloudFormation Auto-Scaling Deployment
+
+### Quick Deploy with CloudFormation
+
+Deploy a complete auto-scaling cluster in 5 minutes using AWS CloudFormation.
+
+<Steps>
+  <Step title="Access CloudFormation Template">
+    Use the official Ant Media Server CloudFormation template:
+
+    - [CloudFormation Guide](https://antmedia.io/docs/guides/clustering-and-scaling/aws/scale-with-aws-cloudformation/)
+    - [Video Tutorial](https://www.youtube.com/watch?v=y7bP0u0jQRQ)
+  </Step>
+
+  <Step title="Configure Parameters">
+    Key CloudFormation parameters:
+
+    - **Instance Type**: c5.xlarge or larger
+    - **Min/Max Instances**: Auto-scaling limits (e.g., 2-10)
+    - **License Key**: Your Enterprise license key
+    - **VPC and Subnets**: Network configuration
+    - **Key Pair**: SSH key for instances
+    - **SSL Certificate**: Optional ACM certificate ARN
+  </Step>
+
+  <Step title="Deploy Stack">
+    1. Review all parameters
+    2. Acknowledge IAM resource creation
+    3. Click **Create Stack**
+    4. Monitor stack creation (10-15 minutes)
+  </Step>
+
+  <Step title="Access Load Balancer">
+    Once stack is complete:
+
+    1. Get the Load Balancer DNS from Outputs tab
+    2. Access dashboard: `http://LOAD_BALANCER_DNS:5080`
+  </Step>
+</Steps>
+
+### CloudFormation Stack Components
+
+The auto-scaling stack creates:
+
+- **Application Load Balancer (ALB)**: Distributes traffic across instances
+- **Auto Scaling Group**: Scales instances based on CPU/memory
+- **Launch Template**: Defines instance configuration
+- **DocumentDB or MongoDB**: Cluster database (Enterprise)
+- **Security Groups**: Network security configuration
+- **CloudWatch Alarms**: Monitoring and alerts
+- **Target Groups**: Health checking and routing
+
+## Storage Configuration
+
+### EBS Volume for Recordings
+
+Attach additional EBS volume for stream recordings:
+
+```bash
+# Create volume
+aws ec2 create-volume \
+  --size 100 \
+  --volume-type gp3 \
+  --iops 3000 \
+  --availability-zone us-east-1a
+
+# Attach to instance
+aws ec2 attach-volume \
+  --volume-id vol-xxxxxxxx \
+  --instance-id i-xxxxxxxx \
+  --device /dev/sdf
+```
+
+Mount the volume:
+
+```bash
+# Format (first time only)
+sudo mkfs -t ext4 /dev/xvdf
+
+# Create mount point
+sudo mkdir -p /mnt/streams
+
+# Mount
+sudo mount /dev/xvdf /mnt/streams
+
+# Add to fstab for persistence
+echo '/dev/xvdf /mnt/streams ext4 defaults,nofail 0 2' | sudo tee -a /etc/fstab
+
+# Change ownership
+sudo chown -R antmedia:antmedia /mnt/streams
+```
+
+### S3 Integration
+
+Configure S3 for stream recording storage:
+
+```bash
+# Create S3 bucket
+aws s3 mb s3://your-antmedia-recordings --region us-east-1
+
+# Configure lifecycle policy for automatic cleanup
+aws s3api put-bucket-lifecycle-configuration \
+  --bucket your-antmedia-recordings \
+  --lifecycle-configuration file://lifecycle.json
+```
+
+Configure in Ant Media Server application settings via web panel or API.
+
+## Database Configuration (Enterprise)
+
+### DocumentDB (MongoDB-compatible)
+
+```bash
+# Create DocumentDB cluster
+aws docdb create-db-cluster \
+  --db-cluster-identifier antmedia-cluster \
+  --engine docdb \
+  --master-username antmedia \
+  --master-user-password YourStrongPassword \
+  --vpc-security-group-ids sg-xxxxxxxx
+
+# Create instance
+aws docdb create-db-instance \
+  --db-instance-identifier antmedia-instance \
+  --db-instance-class db.r5.large \
+  --engine docdb \
+  --db-cluster-identifier antmedia-cluster
+```
+
+### Configure Cluster Mode
+
+Switch to cluster mode with DocumentDB:
+
+```bash
+sudo /usr/local/antmedia/change_server_mode.sh cluster "mongodb://antmedia:YourStrongPassword@antmedia-cluster.cluster-xxxxxxxx.us-east-1.docdb.amazonaws.com:27017/?replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false"
+```
+
+## SSL/TLS Configuration
+
+### Using AWS Certificate Manager (ACM)
+
+For load balancer SSL termination:
+
+1. Request certificate in ACM
+2. Validate domain ownership
+3. Attach certificate to ALB listener
+4. Configure ALB to forward to instances on port 5080
+
+### Using Let's Encrypt on EC2
+
+```bash
+sudo /usr/local/antmedia/enable_ssl.sh -d yourdomain.com -e admin@yourdomain.com
+```
+
+## Monitoring and CloudWatch
+
+### Enable CloudWatch Logs
+
+Install CloudWatch agent:
+
+```bash
+wget https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+sudo dpkg -i amazon-cloudwatch-agent.deb
+```
+
+Configure log collection:
+
+```json
+{
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/antmedia/antmedia-error.log",
+            "log_group_name": "/aws/ec2/antmedia",
+            "log_stream_name": "{instance_id}/error.log"
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+### CloudWatch Metrics
+
+Monitor key metrics:
+- CPU Utilization
+- Network In/Out
+- Disk I/O
+- Memory Usage (with CloudWatch agent)
+- Custom metrics via API
+
+## IAM Roles and Permissions
+
+### Required IAM Permissions
+
+Create an IAM role for EC2 instances with these policies:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::your-antmedia-recordings/*",
+        "arn:aws:s3:::your-antmedia-recordings"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:PutMetricData",
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+## Cost Optimization
+
+### Use Spot Instances
+
+For non-critical workloads, use EC2 Spot Instances:
+
+```bash
+aws ec2 request-spot-instances \
+  --spot-price "0.10" \
+  --instance-count 1 \
+  --type "one-time" \
+  --launch-specification file://spot-spec.json
+```
+
+### Reserved Instances
+
+For production workloads, purchase Reserved Instances for up to 72% savings.
+
+### Right-Sizing
+
+Monitor instance metrics and adjust instance type based on actual usage.
+
+## Backup and Disaster Recovery
+
+### Automated EBS Snapshots
+
+```bash
+aws dlm create-lifecycle-policy \
+  --description "Daily AntMedia backups" \
+  --state ENABLED \
+  --execution-role-arn arn:aws:iam::ACCOUNT:role/DLMRole \
+  --policy-details file://backup-policy.json
+```
+
+### Multi-Region Deployment
+
+For high availability, deploy across multiple AWS regions:
+- Primary region: us-east-1
+- Failover region: us-west-2
+- Use Route 53 for DNS failover
+
+## Troubleshooting
+
+### Instance Not Accessible
+
+1. Check security group rules
+2. Verify Elastic IP association
+3. Check instance status in EC2 console
+4. Review system logs in EC2 console
+
+### WebRTC Connection Issues
+
+1. Verify UDP ports 5000-65000 are open
+2. Check public IP configuration
+3. Ensure server.name is set correctly
+4. Test with STUN/TURN servers
+
+### Performance Issues
+
+1. Monitor CloudWatch metrics
+2. Check instance type is appropriate
+3. Verify EBS volume performance
+4. Review application logs
+
+## Next Steps
+
+- [Configure SSL/TLS](/deployment/ssl-setup)
+- [Set up auto-scaling](/operations/scaling)
+- [Configure CloudFront CDN](/advanced/cdn-integration)
+- [Implement monitoring](/operations/monitoring)

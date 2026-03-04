@@ -1,0 +1,551 @@
+---
+title: "Docker Deployment"
+description: "Deploy Ant Media Server using Docker and Docker Compose for containerized environments"
+---
+
+## Overview
+
+Ant Media Server can be deployed using Docker containers, providing a consistent and portable deployment method across different environments. This guide covers Docker-based deployment strategies.
+
+## Prerequisites
+
+- Docker Engine 20.10 or later
+- Docker Compose v2.0 or later (for compose deployments)
+- At least 4GB RAM allocated to Docker
+- Ports 5080, 5443, 1935, and 5000-65000 available
+
+## Quick Start
+
+### Pull the Official Image
+
+Ant Media Server provides official Docker images:
+
+```bash
+# Community Edition
+docker pull antmedia/ant-media-server:latest
+
+# Enterprise Edition
+docker pull antmedia/ant-media-server:latest-enterprise
+```
+
+### Run a Container
+
+```bash
+docker run -d \
+  --name ant-media-server \
+  -p 5080:5080 \
+  -p 5443:5443 \
+  -p 1935:1935 \
+  -p 5000-65000:5000-65000/udp \
+  antmedia/ant-media-server:latest
+```
+
+Access the web panel at `http://localhost:5080`
+
+## Docker Run with Advanced Configuration
+
+### With Environment Variables
+
+```bash
+docker run -d \
+  --name ant-media-server \
+  -p 5080:5080 \
+  -p 5443:5443 \
+  -p 1935:1935 \
+  -p 5000-65000:5000-65000/udp \
+  -e JVM_MEMORY_OPTIONS="-Xms2g -Xmx4g" \
+  -e JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64" \
+  antmedia/ant-media-server:latest
+```
+
+### With Persistent Storage
+
+```bash
+docker run -d \
+  --name ant-media-server \
+  -p 5080:5080 \
+  -p 5443:5443 \
+  -p 1935:1935 \
+  -p 5000-65000:5000-65000/udp \
+  -v /path/to/conf:/usr/local/antmedia/conf \
+  -v /path/to/streams:/usr/local/antmedia/webapps/LiveApp/streams \
+  -v /path/to/logs:/var/log/antmedia \
+  antmedia/ant-media-server:latest
+```
+
+### With License Key (Enterprise)
+
+```bash
+docker run -d \
+  --name ant-media-server \
+  -p 5080:5080 \
+  -p 5443:5443 \
+  -p 1935:1935 \
+  -p 5000-65000:5000-65000/udp \
+  -e SERVER_LICENSE_KEY="YOUR_LICENSE_KEY" \
+  antmedia/ant-media-server:latest-enterprise
+```
+
+## Docker Compose
+
+### Basic Docker Compose Configuration
+
+Create a `docker-compose.yml` file:
+
+```yaml
+version: '3.8'
+
+services:
+  antmedia:
+    image: antmedia/ant-media-server:latest
+    container_name: ant-media-server
+    restart: unless-stopped
+    ports:
+      - "5080:5080"      # HTTP
+      - "5443:5443"      # HTTPS
+      - "1935:1935"      # RTMP
+      - "5000-65000:5000-65000/udp"  # WebRTC
+    environment:
+      - JVM_MEMORY_OPTIONS=-Xms2g -Xmx4g
+    volumes:
+      - ./conf:/usr/local/antmedia/conf
+      - ./streams:/usr/local/antmedia/webapps/LiveApp/streams
+      - ./logs:/var/log/antmedia
+    networks:
+      - antmedia-network
+
+networks:
+  antmedia-network:
+    driver: bridge
+```
+
+Start the service:
+
+```bash
+docker-compose up -d
+```
+
+### Enterprise Edition with MongoDB
+
+```yaml
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: antmedia-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: antmedia
+      MONGO_INITDB_ROOT_PASSWORD: yourpassword
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - antmedia-network
+
+  antmedia:
+    image: antmedia/ant-media-server:latest-enterprise
+    container_name: ant-media-server
+    restart: unless-stopped
+    depends_on:
+      - mongodb
+    ports:
+      - "5080:5080"
+      - "5443:5443"
+      - "1935:1935"
+      - "5000-65000:5000-65000/udp"
+    environment:
+      - SERVER_LICENSE_KEY=YOUR_LICENSE_KEY
+      - JVM_MEMORY_OPTIONS=-Xms2g -Xmx4g
+      - SERVER_MODE=cluster
+      - DB_URL=mongodb://antmedia:yourpassword@mongodb:27017/antmedia
+    volumes:
+      - ./conf:/usr/local/antmedia/conf
+      - ./streams:/usr/local/antmedia/webapps/LiveApp/streams
+      - ./logs:/var/log/antmedia
+    networks:
+      - antmedia-network
+
+volumes:
+  mongodb-data:
+
+networks:
+  antmedia-network:
+    driver: bridge
+```
+
+### Production Setup with SSL
+
+```yaml
+version: '3.8'
+
+services:
+  antmedia:
+    image: antmedia/ant-media-server:latest-enterprise
+    container_name: ant-media-server
+    restart: unless-stopped
+    ports:
+      - "80:5080"        # HTTP (for Let's Encrypt)
+      - "443:5443"       # HTTPS
+      - "1935:1935"      # RTMP
+      - "5000-65000:5000-65000/udp"  # WebRTC
+    environment:
+      - SERVER_LICENSE_KEY=YOUR_LICENSE_KEY
+      - JVM_MEMORY_OPTIONS=-Xms4g -Xmx8g
+      - DOMAIN_NAME=stream.example.com
+    volumes:
+      - ./conf:/usr/local/antmedia/conf
+      - ./streams:/usr/local/antmedia/webapps/LiveApp/streams
+      - ./logs:/var/log/antmedia
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    networks:
+      - antmedia-network
+
+networks:
+  antmedia-network:
+    driver: bridge
+```
+
+## Volume Mounts
+
+### Important Directories
+
+| Host Path | Container Path | Purpose |
+|-----------|----------------|----------|
+| ./conf | /usr/local/antmedia/conf | Configuration files |
+| ./streams | /usr/local/antmedia/webapps/LiveApp/streams | Recorded streams |
+| ./logs | /var/log/antmedia | Application logs |
+| ./webapps | /usr/local/antmedia/webapps | Custom applications |
+| /etc/letsencrypt | /etc/letsencrypt | SSL certificates |
+
+<Note>
+Mounting volumes ensures your data persists even if the container is removed or recreated.
+</Note>
+
+## Environment Variables
+
+### Available Environment Variables
+
+| Variable | Description | Default | Example |
+|----------|-------------|---------|----------|
+| `JVM_MEMORY_OPTIONS` | JVM heap size configuration | `-Xms1g` | `-Xms2g -Xmx4g` |
+| `JAVA_HOME` | Java installation directory | `/usr/lib/jvm/java-17-openjdk-amd64` | Custom path |
+| `SERVER_LICENSE_KEY` | Enterprise license key | - | Your license key |
+| `SERVER_MODE` | Server mode | `standalone` | `cluster` |
+| `DB_URL` | Database connection URL | - | `mongodb://user:pass@host:27017/db` |
+| `DOMAIN_NAME` | Domain for SSL setup | - | `stream.example.com` |
+
+### Resource Limits
+
+Configure Docker resource limits:
+
+```yaml
+services:
+  antmedia:
+    image: antmedia/ant-media-server:latest
+    # ... other config ...
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '2'
+          memory: 4G
+```
+
+## Container Management
+
+### Start/Stop Containers
+
+```bash
+# Start
+docker-compose up -d
+
+# Stop
+docker-compose down
+
+# Restart
+docker-compose restart
+
+# Stop without removing containers
+docker-compose stop
+```
+
+### View Logs
+
+```bash
+# All logs
+docker-compose logs -f
+
+# Specific service
+docker-compose logs -f antmedia
+
+# Last 100 lines
+docker-compose logs --tail=100 antmedia
+```
+
+### Execute Commands Inside Container
+
+```bash
+# Interactive shell
+docker exec -it ant-media-server bash
+
+# Run specific command
+docker exec ant-media-server ls -la /usr/local/antmedia/conf
+```
+
+## SSL/TLS Configuration in Docker
+
+### Using enable_ssl.sh Script
+
+Execute the SSL script inside the running container:
+
+```bash
+# With custom domain
+docker exec -it ant-media-server /usr/local/antmedia/enable_ssl.sh -d yourdomain.com
+
+# With Let's Encrypt email
+docker exec -it ant-media-server /usr/local/antmedia/enable_ssl.sh -d yourdomain.com -e admin@yourdomain.com
+```
+
+<Warning>
+Port 80 must be available for Let's Encrypt validation. The enable_ssl.sh script checks if port 80 is in use.
+</Warning>
+
+### Using Pre-existing Certificates
+
+Mount your certificate files:
+
+```yaml
+volumes:
+  - /etc/letsencrypt/live/yourdomain.com/fullchain.pem:/usr/local/antmedia/conf/fullchain.pem:ro
+  - /etc/letsencrypt/live/yourdomain.com/privkey.pem:/usr/local/antmedia/conf/privkey.pem:ro
+  - /etc/letsencrypt/live/yourdomain.com/chain.pem:/usr/local/antmedia/conf/chain.pem:ro
+```
+
+## Cluster Mode with Docker
+
+### Multi-Node Setup
+
+```yaml
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: antmedia-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: antmedia
+      MONGO_INITDB_ROOT_PASSWORD: strongpassword
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - antmedia-network
+
+  antmedia-node1:
+    image: antmedia/ant-media-server:latest-enterprise
+    container_name: antmedia-node1
+    restart: unless-stopped
+    depends_on:
+      - mongodb
+    ports:
+      - "5080:5080"
+      - "5443:5443"
+      - "1935:1935"
+      - "5000-5500:5000-5500/udp"
+    environment:
+      - SERVER_LICENSE_KEY=YOUR_LICENSE_KEY
+      - SERVER_MODE=cluster
+      - DB_URL=mongodb://antmedia:strongpassword@mongodb:27017/antmedia
+    volumes:
+      - ./logs/node1:/var/log/antmedia
+    networks:
+      - antmedia-network
+
+  antmedia-node2:
+    image: antmedia/ant-media-server:latest-enterprise
+    container_name: antmedia-node2
+    restart: unless-stopped
+    depends_on:
+      - mongodb
+    ports:
+      - "5081:5080"
+      - "5444:5443"
+      - "1936:1935"
+      - "5501-6000:5000-5500/udp"
+    environment:
+      - SERVER_LICENSE_KEY=YOUR_LICENSE_KEY
+      - SERVER_MODE=cluster
+      - DB_URL=mongodb://antmedia:strongpassword@mongodb:27017/antmedia
+    volumes:
+      - ./logs/node2:/var/log/antmedia
+    networks:
+      - antmedia-network
+
+volumes:
+  mongodb-data:
+
+networks:
+  antmedia-network:
+    driver: bridge
+```
+
+## Health Checks
+
+Add health checks to your Docker Compose:
+
+```yaml
+services:
+  antmedia:
+    image: antmedia/ant-media-server:latest
+    # ... other config ...
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+```
+
+## Docker Networking
+
+### Host Network Mode
+
+For optimal WebRTC performance, use host network mode:
+
+```bash
+docker run -d \
+  --name ant-media-server \
+  --network host \
+  -e JVM_MEMORY_OPTIONS="-Xms2g -Xmx4g" \
+  antmedia/ant-media-server:latest
+```
+
+<Warning>
+Host network mode bypasses Docker's network isolation. Use with caution and ensure firewall rules are properly configured.
+</Warning>
+
+## Backup and Restore
+
+### Backup Configuration and Streams
+
+```bash
+# Backup volumes
+docker run --rm \
+  -v ant-media-server_conf:/conf \
+  -v ant-media-server_streams:/streams \
+  -v $(pwd):/backup \
+  alpine tar czf /backup/antmedia-backup-$(date +%Y%m%d).tar.gz /conf /streams
+```
+
+### Restore from Backup
+
+```bash
+# Restore volumes
+docker run --rm \
+  -v ant-media-server_conf:/conf \
+  -v ant-media-server_streams:/streams \
+  -v $(pwd):/backup \
+  alpine tar xzf /backup/antmedia-backup-20260304.tar.gz
+```
+
+## Troubleshooting
+
+### Container Won't Start
+
+Check logs:
+
+```bash
+docker logs ant-media-server
+docker-compose logs antmedia
+```
+
+### Port Conflicts
+
+Find what's using the port:
+
+```bash
+sudo lsof -i :5080
+sudo netstat -tulpn | grep 5080
+```
+
+### Performance Issues
+
+Monitor container resources:
+
+```bash
+docker stats ant-media-server
+```
+
+### Network Connectivity
+
+Test network from inside container:
+
+```bash
+docker exec -it ant-media-server ping -c 3 google.com
+docker exec -it ant-media-server curl -I http://localhost:5080
+```
+
+### WebRTC UDP Ports
+
+Ensure UDP ports are properly mapped:
+
+```bash
+# Check if UDP ports are listening
+docker exec ant-media-server netstat -anu | grep 5000
+```
+
+## Production Best Practices
+
+<Steps>
+  <Step title="Use Named Volumes">
+    Use Docker named volumes instead of bind mounts for better performance:
+
+    ```yaml
+    volumes:
+      - conf-data:/usr/local/antmedia/conf
+      - stream-data:/usr/local/antmedia/webapps/LiveApp/streams
+    ```
+  </Step>
+
+  <Step title="Set Resource Limits">
+    Always define resource limits to prevent resource exhaustion:
+
+    ```yaml
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+    ```
+  </Step>
+
+  <Step title="Configure Logging">
+    Use Docker's logging drivers for centralized log management:
+
+    ```yaml
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+    ```
+  </Step>
+
+  <Step title="Use Health Checks">
+    Implement health checks for automatic container recovery
+  </Step>
+
+  <Step title="Secure with SSL">
+    Always use SSL/TLS in production environments
+  </Step>
+</Steps>
+
+## Next Steps
+
+- [Configure SSL/TLS](/deployment/ssl-setup)
+- [Deploy on AWS](/deployment/aws)
+- [Set up clustering](/features/clustering)
+- [Configure monitoring](/operations/monitoring)

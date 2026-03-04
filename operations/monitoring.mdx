@@ -1,0 +1,346 @@
+---
+title: Monitoring
+description: Monitor Ant Media Server performance, resource usage, and system health in real-time
+---
+
+Ant Media Server provides comprehensive monitoring capabilities to track system resources, streaming metrics, and overall health. This guide covers monitoring tools, metrics collection, and best practices.
+
+## System Resource Monitoring
+
+### REST API Endpoints
+
+Access system resource information through the REST API:
+
+```bash
+# Get comprehensive system resource info
+curl -X GET "http://localhost:5080/rest/v2/system-resources-info"
+
+# Get server uptime and start time
+curl -X GET "http://localhost:5080/rest/v2/server-time"
+
+# Get GPU information
+curl -X GET "http://localhost:5080/rest/v2/gpu-info"
+
+# Get version information
+curl -X GET "http://localhost:5080/rest/v2/version"
+```
+
+### Key Metrics Available
+
+The system resource endpoint provides detailed metrics:
+
+**CPU Metrics**
+- System CPU load percentage
+- Process CPU load percentage
+- Process CPU time
+- System load average (last minute)
+
+**Memory Metrics**
+- JVM memory (max, total, free, in-use)
+- System memory (total, free, in-use)
+- Native memory usage
+- Swap space (total, free, in-use)
+- Available memory
+
+**Storage Metrics**
+- Total disk space
+- Free disk space
+- Usable disk space
+- In-use disk space
+
+**GPU Metrics** (if available)
+- GPU utilization percentage
+- GPU memory utilization
+- GPU memory total/free/used
+- Encoder/decoder utilization
+- Device name and index
+
+**Thread Metrics**
+- Thread count
+- Peak thread count
+- Dead-locked threads
+- Thread dumps with detailed state
+
+**Streaming Metrics**
+- Total live streams
+- Local WebRTC live streams
+- Local WebRTC viewers
+- Local HLS viewers
+- Local DASH viewers
+- Database average query time
+
+## Monitoring Configuration
+
+Configure monitoring settings in `conf/red5.properties`:
+
+```properties
+# CPU measurement period in milliseconds (default: 1000)
+server.cpu_measurement_period_ms=1000
+
+# CPU measurement window size for averaging (default: 5)
+server.cpu_measurement_window_size=5
+
+# Enable heartbeat monitoring (default: true)
+server.heartbeatEnabled=true
+
+# CPU limit percentage (default: 75)
+server.cpu_limit=75
+
+# Memory limit percentage (default: 75)
+server.memory_limit=75
+```
+
+## Resource Limits
+
+Ant Media Server monitors resource usage and can reject new streams when limits are exceeded:
+
+### CPU Limits
+
+The server calculates average CPU load over a configurable window:
+
+- **Default CPU limit**: 75%
+- **Configurable range**: 10% - 100%
+- **Measurement**: Rolling average over last 5 measurements (default)
+
+### Memory Limits
+
+Memory monitoring uses different strategies based on OS:
+
+**Linux Systems**
+- Uses memory percentage limit (default: 75%)
+- Monitors available system memory
+
+**Other Systems**
+- Uses minimum free RAM size (default: 50MB)
+- Checks absolute free memory amount
+
+### Checking Resource Availability
+
+The StatsCollector provides the `enoughResource()` method to check if the server can accept new streams (src/main/java/io/antmedia/statistic/StatsCollector.java:911):
+
+```java
+// Returns true if CPU and memory are within limits
+boolean canAccept = statsCollector.enoughResource();
+```
+
+## Kafka Integration
+
+Stream metrics to Kafka for external monitoring and analytics:
+
+### Configure Kafka Brokers
+
+```properties
+# Set Kafka brokers in application configuration
+kafka.brokers=localhost:9092
+```
+
+### Available Kafka Topics
+
+**ams-instance-stats**
+- System resource metrics
+- Published every 15 seconds (default)
+- Contains all system metrics in JSON format
+
+**ams-webrtc-stats**
+- WebRTC client statistics
+- Per-stream and per-client metrics
+- Measured bitrate, send bitrate
+- Audio/video frame send periods
+- Packet counts
+
+### Example Kafka Consumer
+
+```bash
+# Consume instance stats
+kafka-console-consumer.sh --bootstrap-server localhost:9092 \
+  --topic ams-instance-stats --from-beginning
+
+# Consume WebRTC stats
+kafka-console-consumer.sh --bootstrap-server localhost:9092 \
+  --topic ams-webrtc-stats --from-beginning
+```
+
+## GPU Monitoring
+
+For systems with NVIDIA GPUs, Ant Media Server provides detailed GPU metrics:
+
+### GPU Metrics Available
+
+```json
+{
+  "index": 0,
+  "gpuUtilization": 45,
+  "memoryUtilization": 60,
+  "encoderUtilization": 80,
+  "decoderUtilization": 20,
+  "memoryTotal": 8589934592,
+  "memoryFree": 3435973836,
+  "memoryUsed": 5153960756,
+  "deviceName": "NVIDIA GeForce RTX 3080"
+}
+```
+
+### Check GPU Status
+
+```bash
+# Get GPU information
+curl -X GET "http://localhost:5080/rest/v2/gpu-info"
+
+# Command line GPU monitoring
+nvidia-smi -l 1  # Update every second
+```
+
+## WebRTC Client Statistics
+
+Monitor individual WebRTC client performance:
+
+### Client Metrics
+
+- **measuredBitrate**: Actual measured bitrate
+- **sendBitrate**: Target send bitrate
+- **videoFrameSendPeriod**: Video frame transmission rate
+- **audioFrameSendPeriod**: Audio frame transmission rate
+- **videoPacketCount**: Total video packets sent
+- **audioPacketCount**: Total audio packets sent
+- **clientId**: Unique client identifier
+- **clientInfo**: User agent or client information
+- **clientIp**: Client IP address
+
+### Access Client Stats
+
+```bash
+# Get WebRTC stats for a specific stream
+curl -X GET "http://localhost:5080/LiveApp/rest/v2/broadcasts/{streamId}/webrtc-client-stats"
+```
+
+## Thread Monitoring
+
+Monitor thread health and detect deadlocks:
+
+### Thread Metrics
+
+```bash
+# Get thread dump (available in system resources)
+curl -X GET "http://localhost:5080/rest/v2/system-resources-info" | jq '.threadInfo'
+```
+
+Thread information includes:
+- Thread count and peak count
+- Dead-locked thread IDs
+- Thread state (RUNNABLE, WAITING, etc.)
+- Blocked time and count
+- CPU time per thread
+- Lock information
+
+### Vertx Worker Queue Monitoring
+
+Monitor Vertx worker thread queues to detect processing bottlenecks:
+
+- **vertx-worker-thread-queue-size**: Main Vertx worker queue
+- **webrtc-vertx-worker-thread-queue-size**: WebRTC Vertx worker queue
+
+High queue sizes indicate processing delays.
+
+## Webhooks for Monitoring
+
+Configure webhooks to receive notifications for critical events:
+
+```properties
+# Set webhook URL in red5.properties
+server.statusWebHookURL=https://your-monitoring-system.com/webhook
+```
+
+### Webhook Events
+
+**High Resource Usage**
+- Triggered when CPU or memory exceeds limits
+- Includes full resource information
+- Action: `highResourceUsage`
+
+**Unexpected Server Shutdown**
+- Detected on server restart
+- Lists applications that didn't shutdown properly
+- Action: `unexpectedServerShutdown`
+
+### Webhook Payload Example
+
+```json
+{
+  "action": "highResourceUsage",
+  "host": "stream-server-01.example.com",
+  "resourceInfo": {
+    "cpuUsage": {"systemCPULoad": 85},
+    "jvmMemoryUsage": {"inUseMemory": 7516192768}
+  }
+}
+```
+
+## Log-based Monitoring
+
+### System Resource Logs
+
+Ant Media Server logs resource metrics every 5 minutes (src/main/java/io/antmedia/statistic/StatsCollector.java:360):
+
+```log
+INFO  System CPU:45% Process CPU:32% System Load Average:2.5 Memory:60% 
+      Vertx worker queue size:0 WebRTCVertx worker queue size:2
+INFO  DB Average Query Time:5ms and Query Count:1234 for app:LiveApp
+```
+
+### Log Levels
+
+Configure logging in `conf/red5.properties`:
+
+```properties
+# Application log level (ALL, TRACE, DEBUG, INFO, WARN, ERROR, OFF)
+logLevel=INFO
+
+# Native log level for FFmpeg and WebRTC (ERROR recommended for production)
+nativeLogLevel=ERROR
+```
+
+## Best Practices
+
+1. **Set Appropriate Limits**: Configure CPU and memory limits based on your server capacity
+2. **Enable Kafka**: Stream metrics to Kafka for long-term storage and analysis
+3. **Configure Webhooks**: Set up webhook notifications for critical events
+4. **Monitor Queue Sizes**: Watch Vertx worker queue sizes for performance bottlenecks
+5. **Track GPU Usage**: Monitor GPU utilization when using hardware encoding
+6. **Review Logs Regularly**: Check logs for resource warnings and errors
+7. **Database Performance**: Monitor database query times for performance issues
+8. **Client Statistics**: Track WebRTC client stats to identify network issues
+
+## Health Check Endpoint
+
+Implement health checks using the server time endpoint:
+
+```bash
+# Simple health check
+curl -f http://localhost:5080/rest/v2/server-time || exit 1
+
+# Health check with resource validation
+curl -s http://localhost:5080/rest/v2/system-resources-info | \
+  jq -e '.cpuUsage.systemCPULoad < 90 and .jvmMemoryUsage.inUseMemory < .jvmMemoryUsage.maxMemory'
+```
+
+## Monitoring Dashboard Integration
+
+Integrate with popular monitoring tools:
+
+### Prometheus
+
+Export metrics from Kafka or REST API to Prometheus format.
+
+### Grafana
+
+Create dashboards using:
+- Kafka data source
+- REST API queries via JSON API plugin
+- Custom exporters
+
+### ELK Stack
+
+Stream Kafka topics to Elasticsearch:
+- Use Logstash Kafka input plugin
+- Create Kibana dashboards
+- Set up alerts based on thresholds

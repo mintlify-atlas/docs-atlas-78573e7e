@@ -1,0 +1,360 @@
+---
+title: Adaptive Bitrate Transcoding
+description: Automatically transcode streams to multiple resolutions and bitrates for optimal playback quality
+---
+
+## Overview
+
+Ant Media Server provides real-time adaptive bitrate (ABR) transcoding, allowing you to deliver streams at multiple quality levels. This ensures viewers get the best possible experience based on their network conditions and device capabilities.
+
+The transcoding engine is powered by FFmpeg and can encode streams in real-time with GPU acceleration support.
+
+## How It Works
+
+When transcoding is enabled, Ant Media Server:
+
+1. Receives the source stream (typically at the highest quality)
+2. Encodes multiple renditions at different resolutions and bitrates
+3. Packages all renditions into HLS/DASH playlists
+4. Allows players to switch between qualities based on network conditions
+
+<Frame>
+  <img src="/images/transcoding-flow.png" alt="Transcoding workflow" />
+</Frame>
+
+## Encoder Settings
+
+Transcoding profiles are defined using the `EncoderSettings` class:
+
+<CodeGroup>
+```java EncoderSettings.java
+public class EncoderSettings {
+    private int height;              // Resolution height in pixels
+    private int videoBitrate;        // Video bitrate in kbps
+    private int audioBitrate;        // Audio bitrate in kbps
+    private boolean forceEncode;     // Force encoding even if source is lower quality
+    
+    public EncoderSettings(int height, int videoBitrate, 
+                          int audioBitrate, boolean forceEncode) {
+        this.height = height;
+        this.videoBitrate = videoBitrate;
+        this.audioBitrate = audioBitrate;
+        this.forceEncode = forceEncode;
+    }
+}
+```
+</CodeGroup>
+
+### Parameters Explained
+
+| Parameter | Description | Example |
+|-----------|-------------|----------|
+| `height` | Target resolution height (width calculated automatically) | 360, 480, 720, 1080 |
+| `videoBitrate` | Target video bitrate in kbps | 500, 1000, 2500 |
+| `audioBitrate` | Target audio bitrate in kbps | 64, 128 |
+| `forceEncode` | Encode even if source resolution is lower | true, false |
+
+<Note>
+**forceEncode=false** prevents upscaling. If the source is 720p and you request 1080p with `forceEncode=false`, that rendition will be skipped.
+</Note>
+
+## Configuration
+
+### Via Web Panel
+
+Navigate to **Settings → Advanced Settings** and configure:
+
+1. Enable **Adaptive Bitrate Streaming**
+2. Add encoder settings as JSON array:
+
+<CodeGroup>
+```json Encoder Settings
+[
+  {"height": 360, "videoBitrate": 600, "audioBitrate": 64, "forceEncode": false},
+  {"height": 480, "videoBitrate": 1000, "audioBitrate": 96, "forceEncode": false},
+  {"height": 720, "videoBitrate": 2000, "audioBitrate": 128, "forceEncode": false},
+  {"height": 1080, "videoBitrate": 4000, "audioBitrate": 128, "forceEncode": false}
+]
+```
+</CodeGroup>
+
+### Via REST API
+
+Update application settings:
+
+<CodeGroup>
+```bash cURL
+curl -X PUT "http://localhost:5080/LiveApp/rest/v2/applications/settings/LiveApp" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "adaptiveResolutionList": [
+      {"height": 360, "videoBitrate": 600, "audioBitrate": 64},
+      {"height": 720, "videoBitrate": 2000, "audioBitrate": 128}
+    ]
+  }'
+```
+
+```javascript JavaScript
+const settings = {
+  adaptiveResolutionList: [
+    { height: 360, videoBitrate: 600, audioBitrate: 64 },
+    { height: 720, videoBitrate: 2000, audioBitrate: 128 }
+  ]
+};
+
+await fetch('http://localhost:5080/LiveApp/rest/v2/applications/settings/LiveApp', {
+  method: 'PUT',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(settings)
+});
+```
+</CodeGroup>
+
+### Per-Stream Configuration
+
+You can also set encoding profiles for individual streams:
+
+```bash
+curl -X POST "http://localhost:5080/LiveApp/rest/v2/broadcasts/create" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "streamId": "stream123",
+    "name": "My Stream",
+    "encoderSettingsList": [
+      {"height": 360, "videoBitrate": 600, "audioBitrate": 64},
+      {"height": 720, "videoBitrate": 2000, "audioBitrate": 128}
+    ]
+  }'
+```
+
+## Adaptive Stream Structure
+
+When transcoding is active, the `MuxAdaptor` creates multiple output streams:
+
+<CodeGroup>
+```java MuxAdaptor.java (simplified)
+public class MuxAdaptor {
+    // Original source stream
+    private String streamId;  // e.g., "stream123"
+    
+    // Adaptive renditions
+    List<EncoderSettings> adaptiveResolutionList;
+    
+    // Generated stream IDs:
+    // stream123        - source quality
+    // stream123_240p   - 240p rendition  
+    // stream123_360p   - 360p rendition
+    // stream123_480p   - 480p rendition
+    // stream123_720p   - 720p rendition
+    // stream123_adaptive - master playlist (HLS/DASH)
+}
+```
+</CodeGroup>
+
+### Output Files
+
+For a stream with ID `stream123`, transcoding produces:
+
+```
+streams/
+├── stream123.m3u8              # Source quality playlist
+├── stream123_240p.m3u8          # 240p playlist
+├── stream123_360p.m3u8          # 360p playlist  
+├── stream123_720p.m3u8          # 720p playlist
+└── stream123_adaptive.m3u8      # Master playlist (ABR)
+```
+
+<Tip>
+Always use the `_adaptive.m3u8` playlist in your player for automatic quality switching.
+</Tip>
+
+## GPU Acceleration
+
+Ant Media Server supports hardware-accelerated encoding:
+
+### NVIDIA GPU (NVENC)
+
+Enable in application settings:
+
+```json
+{
+  "encoderSettings": "h264_nvenc",
+  "h264Enabled": true
+}
+```
+
+### Intel Quick Sync (QSV)
+
+```json
+{
+  "encoderSettings": "h264_qsv"
+}
+```
+
+### Performance Comparison
+
+| Encoder | 1080p Stream | CPU Usage | Latency |
+|---------|--------------|-----------|----------|
+| Software (x264) | 4 renditions | ~80% | Less than 3s |
+| NVIDIA NVENC | 4 renditions | ~20% | Less than 2s |
+| Intel QSV | 4 renditions | ~25% | Less than 2s |
+
+<Warning>
+GPU encoding trades some quality for performance. For best quality, use software encoding with optimized presets.
+</Warning>
+
+## Transcoding Modes
+
+### Real-time Transcoding
+
+Default mode - streams are transcoded as they arrive:
+
+```java
+// Configured in AppSettings
+private boolean hlsMuxingEnabled = true;
+private boolean dashMuxingEnabled = false;
+private List<EncoderSettings> adaptiveResolutionList;
+```
+
+### VOD Transcoding  
+
+Recorded files can be transcoded after the stream ends:
+
+```bash
+curl -X POST "http://localhost:5080/LiveApp/rest/v2/vods/{vodId}/transcode" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "resolutions": [360, 480, 720]
+  }'
+```
+
+## Quality Ladder Recommendations
+
+### Standard Ladder (Mobile + Desktop)
+
+<CodeGroup>
+```json Recommended Settings
+[
+  {"height": 240, "videoBitrate": 400, "audioBitrate": 64, "forceEncode": false},
+  {"height": 360, "videoBitrate": 800, "audioBitrate": 96, "forceEncode": false},
+  {"height": 480, "videoBitrate": 1400, "audioBitrate": 128, "forceEncode": false},
+  {"height": 720, "videoBitrate": 2800, "audioBitrate": 128, "forceEncode": false},
+  {"height": 1080, "videoBitrate": 5000, "audioBitrate": 192, "forceEncode": false}
+]
+```
+</CodeGroup>
+
+### Mobile-Only Ladder
+
+```json
+[
+  {"height": 240, "videoBitrate": 400, "audioBitrate": 64},
+  {"height": 360, "videoBitrate": 800, "audioBitrate": 96},
+  {"height": 480, "videoBitrate": 1200, "audioBitrate": 128}
+]
+```
+
+### 4K Streaming Ladder
+
+```json
+[
+  {"height": 480, "videoBitrate": 1400, "audioBitrate": 128},
+  {"height": 720, "videoBitrate": 2800, "audioBitrate": 128},
+  {"height": 1080, "videoBitrate": 5000, "audioBitrate": 192},
+  {"height": 1440, "videoBitrate": 9000, "audioBitrate": 192},
+  {"height": 2160, "videoBitrate": 16000, "audioBitrate": 256}
+]
+```
+
+## Monitoring Transcoding
+
+### Check Stream Resolutions
+
+```bash
+curl "http://localhost:5080/LiveApp/rest/v2/broadcasts/{streamId}"
+```
+
+Response includes active renditions:
+
+```json
+{
+  "streamId": "stream123",
+  "subTrackStreamIds": [
+    "stream123_240p",
+    "stream123_360p",
+    "stream123_720p"
+  ]
+}
+```
+
+### Server Resources
+
+Monitor CPU/GPU usage:
+
+```bash
+curl "http://localhost:5080/LiveApp/rest/v2/system-resources"
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Adaptive streams not created">
+    **Check:**
+    - Encoder settings are properly configured
+    - Source stream resolution is higher than target
+    - `forceEncode` is set correctly
+    - FFmpeg is properly installed
+    
+    **Solution:** Enable DEBUG logging for `io.antmedia.muxer.MuxAdaptor`
+  </Accordion>
+  
+  <Accordion title="High CPU usage during transcoding">
+    **Causes:**
+    - Too many renditions configured
+    - Software encoding without GPU
+    - Source resolution too high
+    
+    **Solutions:**
+    - Reduce number of renditions
+    - Enable GPU acceleration (NVENC/QSV)
+    - Use faster encoding presets
+  </Accordion>
+  
+  <Accordion title="Quality switching not working">
+    **Issue:** Player doesn't switch between qualities
+    
+    **Causes:**
+    - Using wrong playlist (not `_adaptive.m3u8`)
+    - Player doesn't support ABR
+    - Network conditions stable
+    
+    **Solution:** Ensure you're using the master playlist and a modern player (HLS.js, Video.js, etc.)
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Start Conservative" icon="gauge-simple">
+    Begin with 2-3 renditions and add more based on viewer analytics and server capacity.
+  </Card>
+  
+  <Card title="Match Your Audience" icon="users">
+    Configure renditions based on your viewers' devices and network conditions.
+  </Card>
+  
+  <Card title="Use GPU Encoding" icon="microchip">
+    Enable hardware acceleration for high-volume streams to reduce CPU load.
+  </Card>
+  
+  <Card title="Test Quality Ladder" icon="chart-line">
+    Validate visual quality at each bitrate using actual devices and network conditions.
+  </Card>
+</CardGroup>
+
+## Related Resources
+
+- [HLS Streaming](/streaming/hls)
+- [DASH Streaming](/features/dash-streaming)  
+- [Recording](/features/recording)
+- [GPU Configuration](/deployment/gpu-setup)

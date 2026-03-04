@@ -1,0 +1,444 @@
+---
+title: "Welcome to Ant Media Server"
+description: "Ultra-low latency live streaming engine with WebRTC, SRT, RTMP, HLS, CMAF, and adaptive bitrate capabilities"
+mode: "custom"
+---
+
+<div className="relative overflow-hidden bg-gradient-to-br from-[#1a1a1a] via-[#222222] to-[#1a1a1a] dark:from-[#0f1117] dark:via-[#1a1d27] dark:to-[#0f1117]">
+  <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjAzKSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')] opacity-40"></div>
+  
+  <div className="relative max-w-7xl mx-auto px-6 sm:px-8 py-20 sm:py-24 lg:py-28">
+    <div className="grid lg:grid-cols-12 gap-12 items-center">
+      <div className="lg:col-span-7">
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white dark:text-gray-100 leading-tight">
+          Ultra-Low Latency<br />
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#c12231] to-[#f49da2]">
+            Live Streaming
+          </span>
+        </h1>
+        
+        <p className="mt-6 text-lg sm:text-xl text-gray-300 dark:text-gray-400 max-w-2xl">
+          Build real-time video applications with WebRTC (~0.5s latency), SRT, RTMP, HLS, and CMAF. Scale from classrooms to global live events with adaptive bitrate streaming and enterprise-grade features.
+        </p>
+        
+        <div className="mt-8 flex flex-wrap gap-4">
+          <a 
+            href="/quickstart"
+            className="inline-flex items-center px-6 py-3 rounded-lg bg-[#c12231] hover:bg-[#e30613] text-white font-semibold transition-colors shadow-lg"
+          >
+            Get Started
+            <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </a>
+          
+          <a 
+            href="/api/overview"
+            className="inline-flex items-center px-6 py-3 rounded-lg border border-gray-600 dark:border-[#27272a] bg-white/5 hover:bg-white/10 dark:bg-[#1a1d27] dark:hover:bg-[#242838] text-white font-semibold transition-colors"
+          >
+            API Reference
+          </a>
+          
+          <a 
+            href="https://github.com/ant-media/Ant-Media-Server"
+            target="_blank"
+            className="inline-flex items-center px-6 py-3 rounded-lg border border-gray-600 dark:border-[#27272a] bg-white/5 hover:bg-white/10 dark:bg-[#1a1d27] dark:hover:bg-[#242838] text-white font-semibold transition-colors"
+          >
+            <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+              <path fillRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clipRule="evenodd" />
+            </svg>
+            View on GitHub
+          </a>
+        </div>
+        
+        <div className="mt-10 flex items-center gap-8 text-sm text-gray-400 dark:text-gray-500">
+          <div className="flex items-center gap-2">
+            <svg className="w-5 h-5 text-[#c12231]" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+            </svg>
+            <span>Open Source</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <svg className="w-5 h-5 text-[#c12231]" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+            </svg>
+            <span>4.6K+ Stars</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <svg className="w-5 h-5 text-[#c12231]" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+            </svg>
+            <span>Production Ready</span>
+          </div>
+        </div>
+      </div>
+      
+      <div className="lg:col-span-5">
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-[#c12231] to-[#f49da2] rounded-2xl blur-3xl opacity-20"></div>
+          <div className="relative bg-[#222222] dark:bg-[#1a1d27] rounded-2xl border border-gray-700 dark:border-[#27272a] p-6 shadow-2xl">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-3 h-3 rounded-full bg-red-500"></div>
+              <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+              <div className="w-3 h-3 rounded-full bg-green-500"></div>
+            </div>
+            <div className="bg-[#1a1a1a] dark:bg-[#0f1117] rounded-lg p-4 font-mono text-sm">
+              <div className="text-gray-500 dark:text-gray-600">$ bash install_ant-media-server.sh</div>
+              <div className="mt-2 text-green-400">✓ Installing Ant Media Server...</div>
+              <div className="text-green-400">✓ WebRTC engine configured</div>
+              <div className="text-green-400">✓ RTMP, SRT, HLS ready</div>
+              <div className="text-green-400">✓ Server running on port 5080</div>
+              <div className="mt-2 text-white">🚀 Ready to stream!</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="text-center mb-12">
+    <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+      Quick Start
+    </h2>
+    <p className="text-lg text-gray-600 dark:text-gray-400">
+      Get up and running with Ant Media Server in minutes
+    </p>
+  </div>
+
+  <Steps>
+    <Step title="Install Ant Media Server">
+      Download and install Ant Media Server on Linux using our installation script:
+      
+      ```bash
+      wget https://raw.githubusercontent.com/ant-media/Scripts/master/install_ant-media-server.sh
+      sudo bash install_ant-media-server.sh
+      ```
+      
+      <Note>
+        For cloud deployments, use our one-click installers for [AWS](/deployment/aws), [Azure](/deployment/azure), or [GCP](/deployment/gcp).
+      </Note>
+    </Step>
+
+    <Step title="Access the Dashboard">
+      Once installed, access the web dashboard at:
+      
+      ```
+      http://your-server-ip:5080
+      ```
+      
+      Default credentials:
+      - Username: `admin`
+      - Password: Set during installation
+      
+      <Tip>
+        Enable SSL/TLS for production deployments. See our [SSL setup guide](/deployment/ssl-setup).
+      </Tip>
+    </Step>
+
+    <Step title="Create Your First Application">
+      Create a streaming application through the dashboard:
+      
+      1. Navigate to **Applications** in the sidebar
+      2. Click **New Application**
+      3. Enter an application name (e.g., "live")
+      4. Select streaming settings (WebRTC, RTMP, etc.)
+      5. Click **Create**
+      
+      Your application will be available at `/ApplicationName/`.
+    </Step>
+
+    <Step title="Start Streaming">
+      Publish your first stream using RTMP:
+      
+      ```bash
+      ffmpeg -re -i input.mp4 -c:v libx264 -c:a aac \
+        -f flv rtmp://your-server-ip/ApplicationName/streamId
+      ```
+      
+      Or use WebRTC to publish directly from your browser. Check the [WebRTC guide](/streaming/webrtc) for details.
+    </Step>
+  </Steps>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="text-center mb-12">
+    <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+      Explore by Topic
+    </h2>
+    <p className="text-lg text-gray-600 dark:text-gray-400">
+      Everything you need to build real-time streaming applications
+    </p>
+  </div>
+
+  <CardGroup cols={3}>
+    <Card title="Streaming Protocols" icon="broadcast-tower" href="/concepts/streaming-protocols">
+      Learn about WebRTC, RTMP, SRT, HLS, and CMAF support
+    </Card>
+    
+    <Card title="Ultra-Low Latency" icon="bolt" href="/concepts/ultra-low-latency">
+      Achieve sub-500ms latency with WebRTC streaming
+    </Card>
+    
+    <Card title="Adaptive Bitrate" icon="arrows-split-up-and-left" href="/concepts/adaptive-bitrate">
+      Deliver optimal quality with ABR transcoding
+    </Card>
+    
+    <Card title="REST API" icon="code" href="/api/overview">
+      Manage streams programmatically with our REST API
+    </Card>
+    
+    <Card title="Recording" icon="circle-dot" href="/features/recording">
+      Record streams to MP4, WebM with cloud storage
+    </Card>
+    
+    <Card title="Clustering" icon="server" href="/features/clustering">
+      Scale horizontally with cluster mode
+    </Card>
+    
+    <Card title="Security" icon="shield-halved" href="/security/authentication">
+      Token-based auth, JWT, and IP filtering
+    </Card>
+    
+    <Card title="SDKs" icon="mobile" href="/sdks/overview">
+      iOS, Android, React Native, Flutter, and JS SDKs
+    </Card>
+    
+    <Card title="IP Camera" icon="video" href="/features/ip-camera-streaming">
+      Stream from IP cameras with ONVIF support
+    </Card>
+  </CardGroup>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="text-center mb-12">
+    <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+      Key Features
+    </h2>
+    <p className="text-lg text-gray-600 dark:text-gray-400">
+      Everything you need for production-grade streaming
+    </p>
+  </div>
+
+  <div className="grid md:grid-cols-2 gap-6">
+    <div className="bg-white dark:bg-[#1a1d27] rounded-xl border border-gray-200 dark:border-[#27272a] p-6 hover:border-[#c12231] dark:hover:border-[#c12231] transition-colors">
+      <div className="flex items-start gap-4">
+        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#c12231]/10 dark:bg-[#c12231]/20 flex items-center justify-center">
+          <svg className="w-5 h-5 text-[#c12231]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            Ultra-Low Latency
+          </h3>
+          <p className="text-gray-600 dark:text-gray-400">
+            WebRTC streaming with ~0.5 second latency for real-time interactions. Perfect for auctions, gaming, and live events.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div className="bg-white dark:bg-[#1a1d27] rounded-xl border border-gray-200 dark:border-[#27272a] p-6 hover:border-[#c12231] dark:hover:border-[#c12231] transition-colors">
+      <div className="flex items-start gap-4">
+        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#c12231]/10 dark:bg-[#c12231]/20 flex items-center justify-center">
+          <svg className="w-5 h-5 text-[#c12231]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+          </svg>
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            Multi-Protocol Support
+          </h3>
+          <p className="text-gray-600 dark:text-gray-400">
+            Ingest with WebRTC, RTMP, SRT, RTSP. Deliver with HLS, CMAF, WebRTC. One platform, all protocols.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div className="bg-white dark:bg-[#1a1d27] rounded-xl border border-gray-200 dark:border-[#27272a] p-6 hover:border-[#c12231] dark:hover:border-[#c12231] transition-colors">
+      <div className="flex items-start gap-4">
+        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#c12231]/10 dark:bg-[#c12231]/20 flex items-center justify-center">
+          <svg className="w-5 h-5 text-[#c12231]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+          </svg>
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            Adaptive Bitrate (ABR)
+          </h3>
+          <p className="text-gray-600 dark:text-gray-400">
+            Automatically transcode streams to multiple qualities. Deliver the best experience for every viewer's bandwidth.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div className="bg-white dark:bg-[#1a1d27] rounded-xl border border-gray-200 dark:border-[#27272a] p-6 hover:border-[#c12231] dark:hover:border-[#c12231] transition-colors">
+      <div className="flex items-start gap-4">
+        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#c12231]/10 dark:bg-[#c12231]/20 flex items-center justify-center">
+          <svg className="w-5 h-5 text-[#c12231]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+          </svg>
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            Horizontal Scaling
+          </h3>
+          <p className="text-gray-600 dark:text-gray-400">
+            Scale from 10 to 10,000+ concurrent viewers with cluster mode. Auto-scaling support for AWS, Azure, and GCP.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div className="bg-white dark:bg-[#1a1d27] rounded-xl border border-gray-200 dark:border-[#27272a] p-6 hover:border-[#c12231] dark:hover:border-[#c12231] transition-colors">
+      <div className="flex items-start gap-4">
+        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#c12231]/10 dark:bg-[#c12231]/20 flex items-center justify-center">
+          <svg className="w-5 h-5 text-[#c12231]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            Enterprise Security
+          </h3>
+          <p className="text-gray-600 dark:text-gray-400">
+            Token authentication, JWT, IP filtering, and SSL/TLS. Control access with time-based and subscriber limits.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div className="bg-white dark:bg-[#1a1d27] rounded-xl border border-gray-200 dark:border-[#27272a] p-6 hover:border-[#c12231] dark:hover:border-[#c12231] transition-colors">
+      <div className="flex items-start gap-4">
+        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#c12231]/10 dark:bg-[#c12231]/20 flex items-center justify-center">
+          <svg className="w-5 h-5 text-[#c12231]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+          </svg>
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            Recording & Storage
+          </h3>
+          <p className="text-gray-600 dark:text-gray-400">
+            Record streams to MP4 or WebM. Upload recordings to Amazon S3 or Google Cloud Storage automatically.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="text-center mb-12">
+    <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+      Use Cases
+    </h2>
+    <p className="text-lg text-gray-600 dark:text-gray-400">
+      Powering real-time streaming across industries
+    </p>
+  </div>
+
+  <div className="grid md:grid-cols-3 gap-6">
+    <a href="https://antmedia.io/solutions/telehealth/" target="_blank" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] bg-white dark:bg-[#1a1d27] overflow-hidden hover:border-[#c12231] dark:hover:border-[#c12231] transition-colors no-underline">
+      <div className="p-6">
+        <div className="w-12 h-12 rounded-lg bg-[#c12231]/10 dark:bg-[#c12231]/20 flex items-center justify-center mb-4">
+          <svg className="w-6 h-6 text-[#c12231]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+          </svg>
+        </div>
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
+          Telehealth
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Enable remote patient consultations with HIPAA-compliant WebRTC video
+        </p>
+        <div className="flex items-center text-sm text-[#c12231] group-hover:text-[#e30613] font-medium">
+          Learn more
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
+    </a>
+
+    <a href="https://antmedia.io/solutions/webinar-e-learning-virtual-classroom/" target="_blank" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] bg-white dark:bg-[#1a1d27] overflow-hidden hover:border-[#c12231] dark:hover:border-[#c12231] transition-colors no-underline">
+      <div className="p-6">
+        <div className="w-12 h-12 rounded-lg bg-[#c12231]/10 dark:bg-[#c12231]/20 flex items-center justify-center mb-4">
+          <svg className="w-6 h-6 text-[#c12231]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+          </svg>
+        </div>
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
+          E-Learning
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Build interactive virtual classrooms with real-time video and screen sharing
+        </p>
+        <div className="flex items-center text-sm text-[#c12231] group-hover:text-[#e30613] font-medium">
+          Learn more
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
+    </a>
+
+    <a href="https://antmedia.io/solutions/auction-bidding/" target="_blank" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] bg-white dark:bg-[#1a1d27] overflow-hidden hover:border-[#c12231] dark:hover:border-[#c12231] transition-colors no-underline">
+      <div className="p-6">
+        <div className="w-12 h-12 rounded-lg bg-[#c12231]/10 dark:bg-[#c12231]/20 flex items-center justify-center mb-4">
+          <svg className="w-6 h-6 text-[#c12231]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
+          Live Auctions
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Real-time bidding with ultra-low latency video for fair competition
+        </p>
+        <div className="flex items-center text-sm text-[#c12231] group-hover:text-[#e30613] font-medium">
+          Learn more
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
+    </a>
+  </div>
+</div>
+
+<div className="mt-20 mb-16 max-w-5xl mx-auto px-6">
+  <div className="bg-gradient-to-br from-[#c12231] to-[#e30613] rounded-2xl p-8 sm:p-12 text-center">
+    <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+      Ready to Start Streaming?
+    </h2>
+    <p className="text-lg text-white/90 mb-8 max-w-2xl mx-auto">
+      Join thousands of developers building real-time video applications with Ant Media Server. Get started in minutes with our quickstart guide.
+    </p>
+    <div className="flex flex-wrap justify-center gap-4">
+      <a 
+        href="/quickstart"
+        className="inline-flex items-center px-8 py-4 rounded-lg bg-white hover:bg-gray-50 text-[#c12231] font-semibold transition-colors shadow-lg"
+      >
+        Get Started Now
+        <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+      </a>
+      <a 
+        href="https://github.com/ant-media/Ant-Media-Server"
+        target="_blank"
+        className="inline-flex items-center px-8 py-4 rounded-lg border-2 border-white/30 bg-white/10 hover:bg-white/20 text-white font-semibold transition-colors"
+      >
+        <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+          <path fillRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clipRule="evenodd" />
+        </svg>
+        Star on GitHub
+      </a>
+    </div>
+  </div>
+</div>

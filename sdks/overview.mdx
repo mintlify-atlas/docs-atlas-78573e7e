@@ -1,0 +1,144 @@
+---
+title: "SDKs Overview"
+description: "Client SDKs for integrating Ant Media Server WebRTC streaming into your applications"
+---
+
+Ant Media Server provides official SDKs for multiple platforms to help you quickly integrate ultra-low latency WebRTC streaming into your applications. All SDKs support publishing and playing WebRTC streams with sub-500ms latency.
+
+## Available SDKs
+
+Choose the SDK that matches your platform:
+
+<CardGroup cols={2}>
+  <Card title="JavaScript SDK" icon="js" href="/sdks/javascript">
+    For web applications and browsers. Supports WebRTC publish/play, data channels, and peer-to-peer connections.
+  </Card>
+  
+  <Card title="Android SDK" icon="android" href="/sdks/android">
+    Native Android SDK for mobile apps. Optimized for performance with hardware encoding/decoding support.
+  </Card>
+  
+  <Card title="iOS SDK" icon="apple" href="/sdks/ios">
+    Native iOS SDK for iPhone and iPad apps. Built with Swift/Objective-C compatibility.
+  </Card>
+  
+  <Card title="React Native SDK" icon="react" href="/sdks/react-native">
+    Cross-platform SDK for React Native apps on iOS and Android.
+  </Card>
+  
+  <Card title="Flutter SDK" icon="mobile" href="/sdks/flutter">
+    Cross-platform SDK for Flutter apps. Single codebase for iOS and Android.
+  </Card>
+</CardGroup>
+
+## Common Features
+
+All SDKs provide the following core capabilities:
+
+- **WebRTC Publishing**: Stream video/audio from camera and microphone with ultra-low latency
+- **WebRTC Playback**: Play live streams with sub-500ms latency
+- **Adaptive Bitrate**: Automatic quality adjustment based on network conditions
+- **Data Channels**: Send and receive real-time data alongside video streams
+- **Conference Room**: Multi-party video conferencing support
+- **Peer-to-Peer**: Direct WebRTC connections between clients
+- **Screen Sharing**: Share screen content (platform dependent)
+
+## Getting Started
+
+<Steps>
+  <Step title="Choose your platform">
+    Select the SDK that matches your application platform from the list above.
+  </Step>
+  
+  <Step title="Install the SDK">
+    Follow the installation instructions in the specific SDK documentation.
+  </Step>
+  
+  <Step title="Initialize connection">
+    Configure the SDK with your Ant Media Server URL and application name.
+  </Step>
+  
+  <Step title="Publish or play">
+    Use the SDK methods to publish streams from your device or play existing streams.
+  </Step>
+</Steps>
+
+## Integration Patterns
+
+### One-to-Many Broadcasting
+
+Use WebRTC publishing on one device (broadcaster) and WebRTC playback on multiple devices (viewers) for ultra-low latency live streaming.
+
+```javascript
+// Publisher
+webRTCAdaptor.publish(streamId);
+
+// Viewers
+webRTCAdaptor.play(streamId);
+```
+
+### Video Conferencing
+
+Create conference rooms where multiple participants can publish and play each other's streams simultaneously.
+
+```javascript
+webRTCAdaptor.joinRoom(roomId);
+```
+
+### Peer-to-Peer Calls
+
+Establish direct WebRTC connections between two clients for one-on-one video calls.
+
+```javascript
+webRTCAdaptor.join(streamId);
+```
+
+## Server Requirements
+
+To use the SDKs, you need:
+
+- Ant Media Server installed and running (Community or Enterprise Edition)
+- SSL/TLS certificate configured (required for WebRTC in production)
+- WebSocket enabled (default port: 5080 HTTP, 5443 HTTPS)
+- TURN server configured for clients behind restrictive NATs (optional but recommended)
+
+<Note>
+  WebRTC requires HTTPS in production environments. Make sure to set up SSL/TLS certificates on your Ant Media Server. See the [SSL setup guide](/deployment/ssl-setup) for details.
+</Note>
+
+## Authentication
+
+All SDKs support token-based authentication to secure your streams:
+
+```javascript
+webRTCAdaptor.publish(streamId, token);
+```
+
+Learn more about [authentication and security](/security/authentication) in the security documentation.
+
+## Need Help?
+
+- **Community Support**: [GitHub Discussions](https://github.com/orgs/ant-media/discussions)
+- **Documentation**: Each SDK has detailed documentation and examples
+- **Sample Apps**: All SDKs include sample applications to help you get started
+- **Enterprise Support**: Available with Enterprise Edition
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="REST API" icon="code" href="/api/overview">
+    Manage streams programmatically with the REST API
+  </Card>
+  
+  <Card title="Security" icon="shield-halved" href="/security/authentication">
+    Learn about token authentication and security features
+  </Card>
+  
+  <Card title="Streaming Protocols" icon="broadcast-tower" href="/concepts/streaming-protocols">
+    Understand WebRTC, RTMP, SRT, and HLS protocols
+  </Card>
+  
+  <Card title="Clustering" icon="server" href="/features/clustering">
+    Scale your application with cluster mode
+  </Card>
+</CardGroup>

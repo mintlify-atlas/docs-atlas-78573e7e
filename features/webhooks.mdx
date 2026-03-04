@@ -1,0 +1,769 @@
+---
+title: Webhooks
+description: Receive real-time HTTP callbacks for stream lifecycle events and integrate with external systems
+---
+
+## Overview
+
+Webhooks allow Ant Media Server to notify your application about stream events in real-time via HTTP POST requests. Use webhooks to:
+
+- Track stream lifecycle (started, ended, status updates)
+- Trigger custom workflows when events occur
+- Integrate with external systems (analytics, billing, notifications)
+- Implement authentication and authorization
+- Monitor stream health and performance
+
+<Frame>
+  <img src="/images/webhook-flow.png" alt="Webhook event flow" />
+</Frame>
+
+## How Webhooks Work
+
+<Steps>
+  <Step title="Event Occurs">
+    An event happens in AMS (e.g., stream starts, recording completes)
+  </Step>
+  
+  <Step title="Webhook Triggered">
+    AMS sends an HTTP POST request to your configured webhook URL
+  </Step>
+  
+  <Step title="Your Server Processes">
+    Your endpoint receives the event data and processes it
+  </Step>
+  
+  <Step title="Response Sent">
+    Your server responds with HTTP 200 to acknowledge receipt
+  </Step>
+</Steps>
+
+## Configuration
+
+### Application-Level Webhook
+
+Set a global webhook URL for all streams in your application:
+
+<CodeGroup>
+```json Web Panel Settings
+{
+  "listenerHookURL": "https://your-domain.com/webhook",
+  "webhookRetryCount": 3,
+  "webhookRetryDelay": 1000,
+  "webhookContentType": "application/json"
+}
+```
+
+```bash REST API
+curl -X PUT "http://localhost:5080/LiveApp/rest/v2/applications/settings/LiveApp" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "listenerHookURL": "https://your-domain.com/webhook"
+  }'
+```
+</CodeGroup>
+
+### Stream-Level Webhook
+
+Set a webhook URL for a specific stream:
+
+```bash
+curl -X POST "http://localhost:5080/LiveApp/rest/v2/broadcasts/create" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "streamId": "stream123",
+    "name": "My Stream",
+    "listenerHookURL": "https://your-domain.com/stream-webhook"
+  }'
+```
+
+<Note>
+Stream-level webhooks override application-level webhooks for that specific stream.
+</Note>
+
+### Webhook Settings
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `listenerHookURL` | string | "" | Your webhook endpoint URL |
+| `webhookRetryCount` | integer | 0 | Number of retry attempts on failure |
+| `webhookRetryDelay` | integer | 1000 | Delay between retries (milliseconds) |
+| `webhookContentType` | string | application/json | Content-Type header |
+| `webhookStreamStatusUpdatePeriodMs` | integer | -1 | Stream status update interval (-1 = disabled) |
+
+## Webhook Events
+
+Ant Media Server sends webhooks for various stream lifecycle events:
+
+### Stream Events
+
+<CodeGroup>
+```java Event Constants (AntMediaApplicationAdapter.java)
+public static final String HOOK_ACTION_START_LIVE_STREAM = "liveStreamStarted";
+public static final String HOOK_ACTION_END_LIVE_STREAM = "liveStreamEnded";
+public static final String HOOK_ACTION_STREAM_STATUS = "liveStreamStatus";
+public static final String HOOK_ACTION_VOD_READY = "vodReady";
+```
+</CodeGroup>
+
+| Event | Action Value | When Triggered |
+|-------|--------------|----------------|
+| **Stream Started** | `liveStreamStarted` | Stream begins publishing |
+| **Stream Ended** | `liveStreamEnded` | Stream stops publishing |
+| **Stream Status** | `liveStreamStatus` | Periodic status update |
+| **VOD Ready** | `vodReady` | Recording completed and ready |
+
+### Playback Events
+
+```java
+public static final String HOOK_ACTION_PLAY_STARTED = "playStarted";
+public static final String HOOK_ACTION_PLAY_STOPPED = "playStopped";
+```
+
+| Event | Action Value | When Triggered |
+|-------|--------------|----------------|
+| **Play Started** | `playStarted` | Viewer starts watching |
+| **Play Stopped** | `playStopped` | Viewer stops watching |
+
+### Error Events
+
+```java
+public static final String HOOK_ACTION_PUBLISH_TIMEOUT_ERROR = "publishTimeoutError";
+public static final String HOOK_ACTION_ENCODER_NOT_OPENED_ERROR = "encoderNotOpenedError";
+public static final String HOOK_ACTION_ENDPOINT_FAILED = "endpointFailed";
+```
+
+| Event | Action Value | When Triggered |
+|-------|--------------|----------------|
+| **Publish Timeout** | `publishTimeoutError` | Stream failed to start |
+| **Encoder Error** | `encoderNotOpenedError` | Transcoding failed |
+| **Endpoint Failed** | `endpointFailed` | RTMP forward/recording failed |
+
+### Conference Events
+
+```java
+public static final String HOOK_ACTION_SUBTRACK_ADDED_IN_THE_MAINTRACK = "subtrackAddedInTheMainTrack";
+public static final String HOOK_ACTION_SUBTRACK_LEFT_FROM_THE_MAINTRACK = "subtrackLeftTheMainTrack";
+public static final String HOOK_ACTION_FIRST_ACTIVE_SUBTRACK_ADDED_IN_THE_MAINTRACK = "firstActiveTrackAddedInMainTrack";
+public static final String HOOK_ACTION_NO_ACTIVE_SUBTRACKS_LEFT_IN_THE_MAINTRACK = "noActiveSubtracksLeftInMainTrack";
+```
+
+## Webhook Payload
+
+### Standard Fields
+
+Every webhook includes these fields:
+
+<CodeGroup>
+```json Example Payload
+{
+  "action": "liveStreamStarted",
+  "streamId": "stream123",
+  "streamName": "My Live Stream",
+  "category": "gaming",
+  "timestamp": 1709566230000,
+  "metadata": "{\"custom\":\"data\"}"
+}
+```
+</CodeGroup>
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `action` | string | Event type (see constants above) |
+| `streamId` | string | Unique stream identifier |
+| `streamName` | string | Display name of the stream |
+| `category` | string | Stream category (if set) |
+| `timestamp` | long | Event timestamp (Unix ms) |
+| `metadata` | string | Custom metadata (JSON string) |
+
+### Event-Specific Fields
+
+#### liveStreamStarted
+
+```json
+{
+  "action": "liveStreamStarted",
+  "streamId": "stream123",
+  "streamName": "Gaming Stream",
+  "category": "gaming",
+  "timestamp": 1709566230000
+}
+```
+
+#### liveStreamEnded
+
+```json
+{
+  "action": "liveStreamEnded",
+  "streamId": "stream123",
+  "streamName": "Gaming Stream",
+  "category": "gaming",
+  "timestamp": 1709569830000,
+  "duration": 3600000
+}
+```
+
+#### vodReady
+
+```json
+{
+  "action": "vodReady",
+  "streamId": "stream123",
+  "vodName": "stream123_2024-03-04_14-30-15.mp4",
+  "vodId": "vod-456",
+  "timestamp": 1709569850000,
+  "duration": 3600000
+}
+```
+
+#### publishTimeoutError
+
+```json
+{
+  "action": "publishTimeoutError",
+  "streamId": "stream123",
+  "metadata": "{\"errorCode\":\"timeout\",\"message\":\"Stream failed to start within timeout period\"}",
+  "timestamp": 1709566260000
+}
+```
+
+## Webhook Implementation
+
+The webhook notification logic is in `AntMediaApplicationAdapter.java`:
+
+<CodeGroup>
+```java notifyHook Method
+public void notifyHook(String url, String id, String mainTrackId, String action,
+                      String streamName, String category, String vodName, 
+                      String vodId, String metadata, String subscriberId,
+                      Map<String, String> parameters) {
+    
+    JSONObject jsonObject = new JSONObject();
+    jsonObject.put("action", action);
+    jsonObject.put("streamId", id);
+    
+    if (streamName != null) {
+        jsonObject.put("streamName", streamName);
+    }
+    
+    if (category != null) {
+        jsonObject.put("category", category);
+    }
+    
+    if (vodName != null) {
+        jsonObject.put("vodName", vodName);
+    }
+    
+    if (vodId != null) {
+        jsonObject.put("vodId", vodId);
+    }
+    
+    if (metadata != null) {
+        jsonObject.put("metadata", metadata);
+    }
+    
+    // For stream status updates
+    if (action.equals(HOOK_ACTION_STREAM_STATUS)) {
+        Broadcast broadcast = getDataStore().get(id);
+        if (broadcast != null) {
+            jsonObject.put("status", broadcast.getStatus());
+            jsonObject.put("viewers", broadcast.getWebRTCViewerCount() 
+                                     + broadcast.getHlsViewerCount()
+                                     + broadcast.getDashViewerCount());
+        }
+    }
+    
+    // Send POST request to webhook URL
+    sendPOST(url, jsonObject);
+}
+```
+</CodeGroup>
+
+## Building a Webhook Endpoint
+
+### Node.js / Express
+
+<CodeGroup>
+```javascript Express Server
+const express = require('express');
+const app = express();
+
+app.use(express.json());
+
+app.post('/webhook', async (req, res) => {
+  const { action, streamId, streamName, timestamp } = req.body;
+  
+  console.log(`Webhook received: ${action} for stream ${streamId}`);
+  
+  try {
+    switch (action) {
+      case 'liveStreamStarted':
+        await handleStreamStarted(streamId, streamName);
+        break;
+        
+      case 'liveStreamEnded':
+        await handleStreamEnded(streamId);
+        break;
+        
+      case 'vodReady':
+        await handleVodReady(req.body);
+        break;
+        
+      case 'publishTimeoutError':
+        await handlePublishError(streamId, req.body.metadata);
+        break;
+        
+      default:
+        console.log(`Unhandled action: ${action}`);
+    }
+    
+    // Always respond with 200
+    res.status(200).json({ success: true });
+    
+  } catch (error) {
+    console.error('Webhook processing error:', error);
+    // Still return 200 to acknowledge receipt
+    res.status(200).json({ success: false, error: error.message });
+  }
+});
+
+async function handleStreamStarted(streamId, streamName) {
+  // Send notifications
+  await notifySubscribers(streamId, `${streamName} is now live!`);
+  
+  // Update database
+  await db.streams.update(
+    { id: streamId },
+    { status: 'live', startedAt: new Date() }
+  );
+  
+  // Trigger analytics
+  analytics.track('stream_started', { streamId, streamName });
+}
+
+async function handleVodReady({ streamId, vodId, vodName }) {
+  // Process the recorded video
+  await processVideo(vodId);
+  
+  // Notify streamer
+  await sendEmail(streamId, `Your recording ${vodName} is ready`);
+}
+
+app.listen(3000, () => {
+  console.log('Webhook server running on port 3000');
+});
+```
+</CodeGroup>
+
+### Python / Flask
+
+<CodeGroup>
+```python Flask Server
+from flask import Flask, request, jsonify
+import logging
+
+app = Flask(__name__)
+logging.basicConfig(level=logging.INFO)
+
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    data = request.json
+    action = data.get('action')
+    stream_id = data.get('streamId')
+    
+    logging.info(f"Webhook received: {action} for stream {stream_id}")
+    
+    try:
+        if action == 'liveStreamStarted':
+            handle_stream_started(data)
+        elif action == 'liveStreamEnded':
+            handle_stream_ended(data)
+        elif action == 'vodReady':
+            handle_vod_ready(data)
+        elif action == 'publishTimeoutError':
+            handle_error(data)
+        
+        return jsonify({'success': True}), 200
+        
+    except Exception as e:
+        logging.error(f"Error processing webhook: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 200
+
+def handle_stream_started(data):
+    stream_id = data['streamId']
+    stream_name = data['streamName']
+    
+    # Send push notifications
+    send_notifications(stream_id, f"{stream_name} is now live!")
+    
+    # Update analytics
+    analytics.track('stream_started', {
+        'stream_id': stream_id,
+        'stream_name': stream_name,
+        'timestamp': data['timestamp']
+    })
+
+def handle_vod_ready(data):
+    vod_id = data['vodId']
+    vod_name = data['vodName']
+    
+    # Process recording
+    process_recording(vod_id, vod_name)
+    
+    # Send notification
+    notify_streamer(data['streamId'], f"Recording {vod_name} is ready")
+
+if __name__ == '__main__':
+    app.run(port=3000)
+```
+</CodeGroup>
+
+### PHP
+
+<CodeGroup>
+```php webhook.php
+<?php
+header('Content-Type: application/json');
+
+// Get webhook payload
+$payload = json_decode(file_get_contents('php://input'), true);
+
+$action = $payload['action'] ?? null;
+$streamId = $payload['streamId'] ?? null;
+
+if (!$action || !$streamId) {
+    http_response_code(400);
+    echo json_encode(['error' => 'Missing required fields']);
+    exit;
+}
+
+// Log the webhook
+error_log("Webhook: $action for stream $streamId");
+
+try {
+    switch ($action) {
+        case 'liveStreamStarted':
+            handleStreamStarted($payload);
+            break;
+            
+        case 'liveStreamEnded':
+            handleStreamEnded($payload);
+            break;
+            
+        case 'vodReady':
+            handleVodReady($payload);
+            break;
+            
+        default:
+            error_log("Unhandled action: $action");
+    }
+    
+    // Always respond with success
+    http_response_code(200);
+    echo json_encode(['success' => true]);
+    
+} catch (Exception $e) {
+    error_log("Webhook error: " . $e->getMessage());
+    http_response_code(200);
+    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+}
+
+function handleStreamStarted($data) {
+    $streamId = $data['streamId'];
+    $streamName = $data['streamName'];
+    
+    // Update database
+    $pdo = getDatabase();
+    $stmt = $pdo->prepare('UPDATE streams SET status = ?, started_at = NOW() WHERE id = ?');
+    $stmt->execute(['live', $streamId]);
+    
+    // Send notifications
+    sendPushNotifications($streamId, "$streamName is now live!");
+}
+
+function handleVodReady($data) {
+    $vodId = $data['vodId'];
+    $vodName = $data['vodName'];
+    
+    // Process the recording
+    processRecording($vodId, $vodName);
+}
+?>
+```
+</CodeGroup>
+
+## Authentication Webhook
+
+Use webhooks to authenticate publishers and players:
+
+### Configuration
+
+<CodeGroup>
+```json AppSettings
+{
+  "webhookAuthenticateURL": "https://your-domain.com/auth",
+  "acceptOnlyStreamsInDataStore": false
+}
+```
+</CodeGroup>
+
+### Authentication Flow
+
+When enabled, AMS calls your auth webhook before allowing publish/play:
+
+<CodeGroup>
+```java AcceptOnlyStreamsWithWebhook.java (simplified)
+public boolean isPublishAllowed(IScope scope, String streamId, 
+                               String mode, Map<String, String> queryParams,
+                               String metaData, String token) {
+    
+    String webhookURL = appSettings.getWebhookAuthenticateURL();
+    
+    if (webhookURL != null && !webhookURL.isEmpty()) {
+        JsonObject request = new JsonObject();
+        request.addProperty("appName", scope.getName());
+        request.addProperty("streamId", streamId);
+        request.addProperty("mode", mode); // "publish" or "play"
+        request.addProperty("token", token);
+        
+        // Send POST to your webhook
+        HttpResponse response = sendPOST(webhookURL, request);
+        
+        // Allow only if webhook returns 200
+        return response.getStatusLine().getStatusCode() == 200;
+    }
+    
+    return true; // Allow if no webhook configured
+}
+```
+</CodeGroup>
+
+### Auth Webhook Payload
+
+```json
+{
+  "appName": "LiveApp",
+  "streamId": "stream123",
+  "mode": "publish",
+  "token": "secret-token",
+  "subscriberId": "user456",
+  "subscriberCode": "code789",
+  "queryParams": "{\"custom\":\"value\"}"
+}
+```
+
+### Auth Endpoint Example
+
+<CodeGroup>
+```javascript Auth Webhook
+app.post('/auth', async (req, res) => {
+  const { streamId, mode, token, subscriberId } = req.body;
+  
+  try {
+    if (mode === 'publish') {
+      // Verify publisher token
+      const isValidPublisher = await validatePublisher(streamId, token);
+      
+      if (isValidPublisher) {
+        console.log(`Allowing publish for stream ${streamId}`);
+        return res.status(200).json({ allowed: true });
+      }
+    } else if (mode === 'play') {
+      // Check viewer subscription
+      const hasAccess = await checkSubscription(subscriberId, streamId);
+      
+      if (hasAccess) {
+        console.log(`Allowing playback for user ${subscriberId}`);
+        return res.status(200).json({ allowed: true });
+      }
+    }
+    
+    // Deny access
+    console.log(`Denying ${mode} access for stream ${streamId}`);
+    return res.status(403).json({ allowed: false, reason: 'Unauthorized' });
+    
+  } catch (error) {
+    console.error('Auth error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+```
+</CodeGroup>
+
+<Warning>
+Your auth webhook must respond quickly (< 2 seconds) or the connection will timeout. Keep authentication logic simple and fast.
+</Warning>
+
+## Stream Status Updates
+
+Get periodic webhook updates about stream status:
+
+```json
+{
+  "webhookStreamStatusUpdatePeriodMs": 10000
+}
+```
+
+Every 10 seconds, AMS will send:
+
+```json
+{
+  "action": "liveStreamStatus",
+  "streamId": "stream123",
+  "status": "broadcasting",
+  "viewers": 42,
+  "timestamp": 1709566300000
+}
+```
+
+<Note>
+Set to `-1` to disable periodic status updates (only send on start/end events).
+</Note>
+
+## Retry Logic
+
+Configure retry behavior for failed webhook calls:
+
+```json
+{
+  "webhookRetryCount": 3,
+  "webhookRetryDelay": 1000
+}
+```
+
+If your endpoint fails (non-200 response or timeout):
+- AMS retries up to `webhookRetryCount` times
+- Waits `webhookRetryDelay` milliseconds between attempts
+- Logs failures for debugging
+
+## Security
+
+### Verify Webhook Source
+
+Validate that webhooks come from your AMS instance:
+
+<CodeGroup>
+```javascript Signature Verification
+const crypto = require('crypto');
+
+function verifyWebhookSignature(payload, signature, secret) {
+  const hash = crypto
+    .createHmac('sha256', secret)
+    .update(JSON.stringify(payload))
+    .digest('hex');
+  
+  return hash === signature;
+}
+
+app.post('/webhook', (req, res) => {
+  const signature = req.headers['x-ams-signature'];
+  const secret = process.env.WEBHOOK_SECRET;
+  
+  if (!verifyWebhookSignature(req.body, signature, secret)) {
+    return res.status(401).json({ error: 'Invalid signature' });
+  }
+  
+  // Process webhook...
+});
+```
+</CodeGroup>
+
+### IP Whitelisting
+
+Restrict webhook access to your AMS server IP:
+
+```javascript
+const allowedIPs = ['192.168.1.100', '10.0.0.50'];
+
+app.post('/webhook', (req, res) => {
+  const clientIP = req.ip || req.connection.remoteAddress;
+  
+  if (!allowedIPs.includes(clientIP)) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  
+  // Process webhook...
+});
+```
+
+### HTTPS Only
+
+Always use HTTPS for webhook URLs in production:
+
+```json
+{
+  "listenerHookURL": "https://your-domain.com/webhook"
+}
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Respond Quickly" icon="gauge-simple">
+    Always return HTTP 200 immediately. Process webhook data asynchronously to avoid timeouts.
+  </Card>
+  
+  <Card title="Idempotency" icon="repeat">
+    Design endpoints to handle duplicate webhooks gracefully. Use event IDs to track processed events.
+  </Card>
+  
+  <Card title="Error Handling" icon="triangle-exclamation">
+    Log all webhook failures. Implement dead letter queues for failed events that need manual review.
+  </Card>
+  
+  <Card title="Monitor Performance" icon="chart-line">
+    Track webhook processing times. Set up alerts for failed webhook deliveries.
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Webhooks not being received">
+    **Check:**
+    - Webhook URL is publicly accessible
+    - Firewall allows incoming connections
+    - SSL certificate is valid (for HTTPS)
+    - Endpoint returns 200 status code
+    
+    **Debug:**
+    ```bash
+    # Test webhook endpoint
+    curl -X POST https://your-domain.com/webhook \
+      -H "Content-Type: application/json" \
+      -d '{"action":"test","streamId":"test123"}'
+    
+    # Check AMS logs
+    tail -f /usr/local/antmedia/log/ant-media-server.log | grep -i webhook
+    ```
+  </Accordion>
+  
+  <Accordion title="Webhook delivery delays">
+    **Causes:**
+    - Slow endpoint response time
+    - Network latency
+    - Retry attempts after failures
+    
+    **Solutions:**
+    - Optimize endpoint to respond in < 200ms
+    - Use async processing for heavy operations
+    - Monitor network connectivity
+  </Accordion>
+  
+  <Accordion title="Missing event data">
+    **Issue:** Webhook payload missing expected fields
+    
+    **Reasons:**
+    - Field not set in stream metadata
+    - Using older AMS version
+    - Event type doesn't include that field
+    
+    **Solution:** Check event-specific payload format and ensure required data is set in stream configuration
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+- [Push Notifications](/features/push-notifications)
+- [REST API Reference](/features/webhooks)
+- [Stream Authentication](/security/authentication)
+- [Application Settings](/configuration/app-settings)

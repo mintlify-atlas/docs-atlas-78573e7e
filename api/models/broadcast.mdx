@@ -1,0 +1,364 @@
+---
+title: Broadcast
+description: The Broadcast model represents a live stream, IP camera, stream source, VoD file, or playlist in Ant Media Server.
+---
+
+The Broadcast object is the core data model for streams in Ant Media Server. It contains comprehensive information about the stream's configuration, status, metadata, and real-time statistics.
+
+## Model Structure
+
+<ResponseField name="streamId" type="string">
+  The unique identifier of the stream
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  The status of the stream. Possible values: `finished`, `broadcasting`, `created`, `preparing`, `error`, `failed`
+</ResponseField>
+
+<ResponseField name="playListStatus" type="string">
+  The status of the playlist. Only applicable when type is `playlist`. Possible values: `finished`, `broadcasting`, `created`, `preparing`, `error`, `failed`
+</ResponseField>
+
+<ResponseField name="type" type="string">
+  The type of the stream. Possible values: `liveStream`, `ipCamera`, `streamSource`, `VoD`, `playlist`
+</ResponseField>
+
+<ResponseField name="publishType" type="string">
+  The publish type of the stream. Read-only field updated on the server side. Possible values: `WebRTC`, `RTMP`, `Pull`, `SRT`
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  The name of the stream
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  The description of the stream
+</ResponseField>
+
+<ResponseField name="publish" type="boolean" default="true">
+  Video filter controlled by the user. Default value is true
+</ResponseField>
+
+<ResponseField name="date" type="long">
+  The date when record was created in milliseconds (unix timestamp)
+</ResponseField>
+
+<ResponseField name="plannedStartDate" type="long">
+  Planned start date in unix timestamp (seconds). Stream will only accept publishing when current time is greater than this value. Applicable for RTMP and WebRTC streams
+</ResponseField>
+
+<ResponseField name="plannedEndDate" type="long">
+  Planned end date in unix timestamp (seconds). Stream will only accept publishing when current time is less than this value. Applicable for RTMP and WebRTC streams
+</ResponseField>
+
+<ResponseField name="duration" type="long">
+  The duration of the stream in milliseconds
+</ResponseField>
+
+<ResponseField name="endPointList" type="array">
+  The list of endpoints such as Facebook, Twitter or custom RTMP endpoints. See [Endpoint](/api/models/endpoint) model
+</ResponseField>
+
+<ResponseField name="playListItemList" type="array">
+  The list of broadcasts in the playlist. This list has values when the broadcast type is `playlist`
+</ResponseField>
+
+<ResponseField name="publicStream" type="boolean" default="true">
+  Identifier of whether stream is public or not
+</ResponseField>
+
+<ResponseField name="is360" type="boolean" default="false">
+  Identifier of whether stream is 360 degree video or not
+</ResponseField>
+
+<ResponseField name="listenerHookURL" type="string">
+  The URL that will be notified when stream is published, ended and muxing finished. Receives POST requests with parameters: `id`, `action` (liveStreamStarted, liveStreamEnded, vodReady), `vodName`, `streamName`, `category`
+</ResponseField>
+
+<ResponseField name="category" type="string">
+  The category of the stream
+</ResponseField>
+
+<ResponseField name="ipAddr" type="string">
+  The IP address of the IP camera or publisher
+</ResponseField>
+
+<ResponseField name="username" type="string">
+  The username of the IP camera
+</ResponseField>
+
+<ResponseField name="password" type="string">
+  The password of the IP camera
+</ResponseField>
+
+<ResponseField name="quality" type="string">
+  The quality of the incoming stream during publishing
+</ResponseField>
+
+<ResponseField name="speed" type="double">
+  The speed of the incoming stream. For better quality and performance it should be around 1.00
+</ResponseField>
+
+<ResponseField name="streamUrl" type="string">
+  The stream URL for fetching stream. Should be defined for IP cameras or cloud streams
+</ResponseField>
+
+<ResponseField name="originAdress" type="string">
+  The origin address server broadcasting
+</ResponseField>
+
+<ResponseField name="mp4Enabled" type="integer" default="0">
+  MP4 muxing enabled status. Values: `1` (enabled), `-1` (disabled), `0` (no settings for the stream)
+</ResponseField>
+
+<ResponseField name="webMEnabled" type="integer" default="0">
+  WebM muxing enabled status. Values: `1` (enabled), `-1` (disabled), `0` (no settings for the stream)
+</ResponseField>
+
+<ResponseField name="seekTimeInMs" type="long" default="0">
+  Initial time to start playing in milliseconds. Can be used in VoD files or stream sources with seek support
+</ResponseField>
+
+<ResponseField name="subtracksLimit" type="integer" default="-1">
+  Number of subtracks allowed to be created for the broadcast. Useful for limiting conference attendees. Value of `-1` means no limit
+</ResponseField>
+
+<ResponseField name="expireDurationMS" type="integer">
+  The expire time in milliseconds. If this value is 10000, the broadcast should be started within 10 seconds after creation. Value of `0` means stream will never expire
+</ResponseField>
+
+<ResponseField name="rtmpURL" type="string">
+  The RTMP URL where to publish live stream to
+</ResponseField>
+
+<ResponseField name="zombi" type="boolean" default="false">
+  True when a broadcast is created directly through streaming without being created earlier through REST service. False by default
+</ResponseField>
+
+## Viewer Statistics
+
+<ResponseField name="hlsViewerCount" type="integer" default="0">
+  The number of HLS viewers of the stream
+</ResponseField>
+
+<ResponseField name="dashViewerCount" type="integer" default="0">
+  The number of DASH viewers of the stream
+</ResponseField>
+
+<ResponseField name="webRTCViewerCount" type="integer" default="0">
+  The number of WebRTC viewers of the stream
+</ResponseField>
+
+<ResponseField name="rtmpViewerCount" type="integer" default="0">
+  The number of RTMP viewers of the stream
+</ResponseField>
+
+## Viewer Limits
+
+<ResponseField name="webRTCViewerLimit" type="integer" default="-1">
+  Number of allowed maximum WebRTC viewers for the broadcast. Value of `-1` means no limit
+</ResponseField>
+
+<ResponseField name="hlsViewerLimit" type="integer" default="-1">
+  Number of allowed maximum HLS viewers for the broadcast. Value of `-1` means no limit
+</ResponseField>
+
+<ResponseField name="dashViewerLimit" type="integer" default="-1">
+  Number of allowed maximum DASH viewers for the broadcast. Value of `-1` means no limit
+</ResponseField>
+
+## Stream Quality Metrics
+
+<ResponseField name="startTime" type="long" default="0">
+  Publishing start time of the stream in unix timestamp milliseconds
+</ResponseField>
+
+<ResponseField name="receivedBytes" type="long" default="0">
+  The total bytes received until now
+</ResponseField>
+
+<ResponseField name="bitrate" type="long" default="0">
+  The received bitrate per second
+</ResponseField>
+
+<ResponseField name="width" type="integer" default="0">
+  Width of the incoming stream in pixels
+</ResponseField>
+
+<ResponseField name="height" type="integer" default="0">
+  Height of the incoming stream in pixels
+</ResponseField>
+
+<ResponseField name="pendingPacketSize" type="integer" default="0">
+  Number of packets ingested and waiting for processing. Generally applies to RTMP, SRT ingest and Stream Source pull. This number should be low (less than 10)
+</ResponseField>
+
+<ResponseField name="encoderQueueSize" type="integer" default="0">
+  Number of frames ingested and waiting for encoding. This number should be low (less than 10)
+</ResponseField>
+
+<ResponseField name="dropPacketCountInIngestion" type="integer">
+  Number of dropped packets in total while ingesting. Packets can be dropped if server is loaded or WebRTC connectivity is not healthy. Should be zero in perfect scenario
+</ResponseField>
+
+<ResponseField name="dropFrameCountInEncoding" type="integer">
+  Number of dropped frames in total while transcoding. If there is adaptive bitrate and server is loaded, encoder may not transcode in real-time and frames can be dropped to prevent memory crash
+</ResponseField>
+
+## WebRTC Quality Metrics
+
+<ResponseField name="packetLostRatio" type="double">
+  Lost packets' ratio in WebRTC ingest. This value should be around 0.01 (1%)
+</ResponseField>
+
+<ResponseField name="packetsLost" type="integer">
+  Number of packets lost in WebRTC ingest
+</ResponseField>
+
+<ResponseField name="jitterMs" type="integer">
+  Jitter in milliseconds for WebRTC ingest. This value should be less than 50ms. Lower is better
+</ResponseField>
+
+<ResponseField name="rttMs" type="integer">
+  Round Trip Time in milliseconds for WebRTC ingest. This value should be less than 50ms. Lower is better
+</ResponseField>
+
+## Additional Metadata
+
+<ResponseField name="userAgent" type="string" default="N/A">
+  User-Agent of the publisher
+</ResponseField>
+
+<ResponseField name="remoteIp" type="string">
+  Remote IP address of the stream publisher
+</ResponseField>
+
+<ResponseField name="latitude" type="string">
+  Latitude of the broadcasting location
+</ResponseField>
+
+<ResponseField name="longitude" type="string">
+  Longitude of the broadcasting location
+</ResponseField>
+
+<ResponseField name="altitude" type="string">
+  Altitude of the broadcasting location
+</ResponseField>
+
+## Multi-track Support
+
+<ResponseField name="mainTrackStreamId" type="string">
+  If this broadcast is a track of a WebRTC stream, this variable holds the ID of that main stream
+</ResponseField>
+
+<ResponseField name="absoluteStartTimeMs" type="long">
+  Absolute start time in milliseconds (unix timestamp). Used for measuring absolute latency
+</ResponseField>
+
+## Playlist Configuration
+
+<ResponseField name="currentPlayIndex" type="integer" default="0">
+  Current playing index for playlist types
+</ResponseField>
+
+<ResponseField name="playlistLoopEnabled" type="boolean" default="true">
+  Identifier of playlist loop status. If true, playlist loops infinitely. If false, playlist plays once and finishes
+</ResponseField>
+
+## Advanced Configuration
+
+<ResponseField name="subFolder" type="string">
+  Name of the subfolder that will contain stream files
+</ResponseField>
+
+<ResponseField name="metaData" type="string">
+  Metadata field for custom usage
+</ResponseField>
+
+<ResponseField name="role" type="string">
+  Broadcast role for selective playback
+</ResponseField>
+
+<ResponseField name="hlsParameters" type="object">
+  The HLS parameters of the broadcast
+  
+  <Expandable title="properties">
+    <ResponseField name="hlsTime" type="string">
+      Duration of segments in m3u8 files in seconds
+    </ResponseField>
+    
+    <ResponseField name="hlsListSize" type="string">
+      Maximum number of playlist entries. If 0, the list file will contain all segments
+    </ResponseField>
+    
+    <ResponseField name="hlsPlayListType" type="string">
+      Playlist type of m3u8 files. Can be `event`, `vod`, or empty
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="autoStartStopEnabled" type="boolean" default="false">
+  Identifier of whether stream should start/stop automatically. Effective for Stream Sources/IP Cameras. If there is no viewer after certain amount of seconds, it will stop. If a user wants to watch, it will start automatically
+</ResponseField>
+
+<ResponseField name="encoderSettingsList" type="array">
+  The list of encoder settings for adaptive bitrate streaming
+</ResponseField>
+
+<ResponseField name="maxIdleTime" type="integer" default="0">
+  Maximum idle time in seconds without updating the broadcast. If broadcast is not updated for this duration, webhook is fired
+</ResponseField>
+
+## Example JSON
+
+```json
+{
+  "streamId": "test-stream-123",
+  "status": "broadcasting",
+  "type": "liveStream",
+  "publishType": "WebRTC",
+  "name": "My Live Stream",
+  "description": "Example broadcast stream",
+  "publish": true,
+  "date": 1709539200000,
+  "duration": 0,
+  "publicStream": true,
+  "is360": false,
+  "listenerHookURL": "https://example.com/webhook",
+  "category": "Entertainment",
+  "mp4Enabled": 1,
+  "webMEnabled": 0,
+  "hlsViewerCount": 45,
+  "dashViewerCount": 12,
+  "webRTCViewerCount": 8,
+  "rtmpViewerCount": 3,
+  "webRTCViewerLimit": -1,
+  "hlsViewerLimit": -1,
+  "dashViewerLimit": -1,
+  "startTime": 1709539200000,
+  "receivedBytes": 15728640,
+  "bitrate": 2500000,
+  "width": 1920,
+  "height": 1080,
+  "pendingPacketSize": 3,
+  "encoderQueueSize": 2,
+  "userAgent": "Mozilla/5.0",
+  "remoteIp": "192.168.1.100",
+  "absoluteStartTimeMs": 1709539200000,
+  "metaData": "{\"custom\":\"data\"}",
+  "zombi": false,
+  "playlistLoopEnabled": true,
+  "autoStartStopEnabled": false,
+  "endPointList": [],
+  "playListItemList": []
+}
+```
+
+## Related API Endpoints
+
+- [Create Broadcast](/rest-api#create-broadcast) - `POST /v2/broadcasts`
+- [Get Broadcast](/rest-api#get-broadcast) - `GET /v2/broadcasts/{id}`
+- [Update Broadcast](/rest-api#update-broadcast) - `PUT /v2/broadcasts/{id}`
+- [Delete Broadcast](/rest-api#delete-broadcast) - `DELETE /v2/broadcasts/{id}`
+- [List Broadcasts](/rest-api#list-broadcasts) - `GET /v2/broadcasts/list/{offset}/{size}`
+- [Get Broadcast Statistics](/rest-api#broadcast-statistics) - `GET /v2/broadcasts/{id}/stats`

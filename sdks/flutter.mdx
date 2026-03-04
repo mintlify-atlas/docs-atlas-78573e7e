@@ -1,0 +1,588 @@
+---
+title: "Flutter SDK"
+description: "Cross-platform WebRTC SDK for Flutter applications on iOS, Android, and Web"
+---
+
+The Ant Media Server Flutter SDK enables ultra-low latency WebRTC streaming in Flutter applications. Build once and deploy to iOS, Android, and web platforms.
+
+## Installation
+
+Add the dependency to your `pubspec.yaml`:
+
+```yaml
+dependencies:
+  ant_media_flutter: ^1.0.0
+```
+
+Then run:
+
+```bash
+flutter pub get
+```
+
+## Platform Configuration
+
+### Android Setup
+
+Add permissions to `android/app/src/main/AndroidManifest.xml`:
+
+```xml
+<uses-permission android:name="android.permission.CAMERA" />
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+<uses-feature android:name="android.hardware.camera" />
+<uses-feature android:name="android.hardware.camera.autofocus" />
+```
+
+Set minimum SDK version in `android/app/build.gradle`:
+
+```gradle
+android {
+    defaultConfig {
+        minSdkVersion 21
+    }
+}
+```
+
+### iOS Setup
+
+Add permissions to `ios/Runner/Info.plist`:
+
+```xml
+<key>NSCameraUsageDescription</key>
+<string>Camera access is required for video streaming</string>
+
+<key>NSMicrophoneUsageDescription</key>
+<string>Microphone access is required for audio streaming</string>
+```
+
+Set minimum iOS version in `ios/Podfile`:
+
+```ruby
+platform :ios, '12.0'
+```
+
+### Web Setup
+
+No additional configuration needed for web. WebRTC is natively supported in modern browsers.
+
+## Basic Usage
+
+### Import the SDK
+
+```dart
+import 'package:ant_media_flutter/ant_media_flutter.dart';
+```
+
+### Initialize the SDK
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:ant_media_flutter/ant_media_flutter.dart';
+
+class StreamingPage extends StatefulWidget {
+  @override
+  _StreamingPageState createState() => _StreamingPageState();
+}
+
+class _StreamingPageState extends State<StreamingPage> {
+  late AntMediaFlutter antMediaFlutter;
+  final String serverUrl = 'wss://your-server:5443/WebRTCAppEE/websocket';
+  final String streamId = 'myStream123';
+
+  @override
+  void initState() {
+    super.initState();
+    initializeWebRTC();
+  }
+
+  Future<void> initializeWebRTC() async {
+    antMediaFlutter = AntMediaFlutter(
+      serverUrl: serverUrl,
+      streamId: streamId,
+      onStateChanged: (HelperState state) {
+        print('State changed: $state');
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    antMediaFlutter.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('WebRTC Streaming')),
+      body: Center(child: Text('Ready to stream')),
+    );
+  }
+}
+```
+
+### Publishing a Stream
+
+<CodeGroup>
+
+```dart Basic Publish
+import 'package:flutter/material.dart';
+import 'package:ant_media_flutter/ant_media_flutter.dart';
+
+class PublishScreen extends StatefulWidget {
+  @override
+  _PublishScreenState createState() => _PublishScreenState();
+}
+
+class _PublishScreenState extends State<PublishScreen> {
+  late AntMediaFlutter antMedia;
+  RTCVideoRenderer localRenderer = RTCVideoRenderer();
+
+  @override
+  void initState() {
+    super.initState();
+    initializeRenderer();
+    initializePublisher();
+  }
+
+  Future<void> initializeRenderer() async {
+    await localRenderer.initialize();
+  }
+
+  Future<void> initializePublisher() async {
+    antMedia = AntMediaFlutter(
+      serverUrl: 'wss://your-server:5443/WebRTCAppEE/websocket',
+      streamId: 'myStream123',
+      onLocalStream: (stream) {
+        setState(() {
+          localRenderer.srcObject = stream;
+        });
+      },
+    );
+  }
+
+  void startPublishing() async {
+    await antMedia.publish();
+  }
+
+  void stopPublishing() async {
+    await antMedia.stop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Publish Stream')),
+      body: Column(
+        children: [
+          Expanded(
+            child: RTCVideoView(localRenderer, mirror: true),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              ElevatedButton(
+                onPressed: startPublishing,
+                child: Text('Start Publishing'),
+              ),
+              ElevatedButton(
+                onPressed: stopPublishing,
+                child: Text('Stop'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    localRenderer.dispose();
+    antMedia.dispose();
+    super.dispose();
+  }
+}
+```
+
+```dart With Token
+void startPublishing() async {
+  await antMedia.publish(
+    token: 'your-publish-token',
+  );
+}
+```
+
+</CodeGroup>
+
+### Playing a Stream
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:ant_media_flutter/ant_media_flutter.dart';
+
+class PlayScreen extends StatefulWidget {
+  @override
+  _PlayScreenState createState() => _PlayScreenState();
+}
+
+class _PlayScreenState extends State<PlayScreen> {
+  late AntMediaFlutter antMedia;
+  RTCVideoRenderer remoteRenderer = RTCVideoRenderer();
+
+  @override
+  void initState() {
+    super.initState();
+    initializeRenderer();
+    initializePlayer();
+  }
+
+  Future<void> initializeRenderer() async {
+    await remoteRenderer.initialize();
+  }
+
+  Future<void> initializePlayer() async {
+    antMedia = AntMediaFlutter(
+      serverUrl: 'wss://your-server:5443/WebRTCAppEE/websocket',
+      streamId: 'myStream123',
+      onRemoteStream: (stream) {
+        setState(() {
+          remoteRenderer.srcObject = stream;
+        });
+      },
+    );
+  }
+
+  void startPlaying() async {
+    await antMedia.play();
+  }
+
+  void stopPlaying() async {
+    await antMedia.stop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Play Stream')),
+      body: Column(
+        children: [
+          Expanded(
+            child: RTCVideoView(remoteRenderer),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              ElevatedButton(
+                onPressed: startPlaying,
+                child: Text('Start Playing'),
+              ),
+              ElevatedButton(
+                onPressed: stopPlaying,
+                child: Text('Stop'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    remoteRenderer.dispose();
+    antMedia.dispose();
+    super.dispose();
+  }
+}
+```
+
+## Conference Room
+
+Join a multi-party conference room:
+
+```dart
+class ConferenceScreen extends StatefulWidget {
+  @override
+  _ConferenceScreenState createState() => _ConferenceScreenState();
+}
+
+class _ConferenceScreenState extends State<ConferenceScreen> {
+  late AntMediaFlutter antMedia;
+  RTCVideoRenderer localRenderer = RTCVideoRenderer();
+  List<RTCVideoRenderer> remoteRenderers = [];
+
+  @override
+  void initState() {
+    super.initState();
+    initializeConference();
+  }
+
+  Future<void> initializeConference() async {
+    await localRenderer.initialize();
+
+    antMedia = AntMediaFlutter(
+      serverUrl: 'wss://your-server:5443/WebRTCAppEE/websocket',
+      streamId: 'myStreamInRoom',
+      onLocalStream: (stream) {
+        setState(() {
+          localRenderer.srcObject = stream;
+        });
+      },
+      onRemoteStream: (stream) async {
+        final renderer = RTCVideoRenderer();
+        await renderer.initialize();
+        renderer.srcObject = stream;
+        setState(() {
+          remoteRenderers.add(renderer);
+        });
+      },
+    );
+  }
+
+  void joinRoom() async {
+    await antMedia.joinRoom(roomId: 'conference-room-1');
+  }
+
+  void leaveRoom() async {
+    await antMedia.leaveRoom();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Conference Room')),
+      body: Column(
+        children: [
+          Container(
+            height: 200,
+            child: RTCVideoView(localRenderer, mirror: true),
+          ),
+          Expanded(
+            child: GridView.builder(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+              ),
+              itemCount: remoteRenderers.length,
+              itemBuilder: (context, index) {
+                return RTCVideoView(remoteRenderers[index]);
+              },
+            ),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              ElevatedButton(
+                onPressed: joinRoom,
+                child: Text('Join Room'),
+              ),
+              ElevatedButton(
+                onPressed: leaveRoom,
+                child: Text('Leave Room'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    localRenderer.dispose();
+    for (var renderer in remoteRenderers) {
+      renderer.dispose();
+    }
+    antMedia.dispose();
+    super.dispose();
+  }
+}
+```
+
+## Camera Controls
+
+Control camera and media settings:
+
+```dart
+class CameraControls extends StatelessWidget {
+  final AntMediaFlutter antMedia;
+
+  CameraControls({required this.antMedia});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        IconButton(
+          icon: Icon(Icons.switch_camera),
+          onPressed: () => antMedia.switchCamera(),
+        ),
+        IconButton(
+          icon: Icon(Icons.mic_off),
+          onPressed: () => antMedia.toggleAudio(),
+        ),
+        IconButton(
+          icon: Icon(Icons.videocam_off),
+          onPressed: () => antMedia.toggleVideo(),
+        ),
+      ],
+    );
+  }
+}
+```
+
+## Data Channels
+
+Send and receive real-time data:
+
+```dart
+void setupDataChannel() {
+  antMedia.onDataChannelMessage = (message) {
+    print('Received data: $message');
+  };
+}
+
+void sendData() {
+  final data = {
+    'message': 'Hello viewers!',
+    'timestamp': DateTime.now().millisecondsSinceEpoch,
+  };
+  antMedia.sendData(data);
+}
+```
+
+## State Management
+
+Handle SDK state changes:
+
+```dart
+enum HelperState {
+  Idle,
+  Publishing,
+  Playing,
+  Stopped,
+  Error,
+}
+
+AntMediaFlutter(
+  serverUrl: serverUrl,
+  streamId: streamId,
+  onStateChanged: (HelperState state) {
+    switch (state) {
+      case HelperState.Publishing:
+        print('Publishing started');
+        break;
+      case HelperState.Playing:
+        print('Playing started');
+        break;
+      case HelperState.Stopped:
+        print('Stream stopped');
+        break;
+      case HelperState.Error:
+        print('Error occurred');
+        break;
+      default:
+        break;
+    }
+  },
+);
+```
+
+## Configuration Options
+
+### Media Constraints
+
+```dart
+antMedia = AntMediaFlutter(
+  serverUrl: serverUrl,
+  streamId: streamId,
+  mediaConstraints: {
+    'audio': true,
+    'video': {
+      'width': 1280,
+      'height': 720,
+      'frameRate': 30,
+      'facingMode': 'user',
+    },
+  },
+);
+```
+
+### STUN/TURN Servers
+
+```dart
+antMedia = AntMediaFlutter(
+  serverUrl: serverUrl,
+  streamId: streamId,
+  iceServers: [
+    {'urls': 'stun:stun1.l.google.com:19302'},
+    {
+      'urls': 'turn:your-turn-server:3478',
+      'username': 'turnuser',
+      'credential': 'turnpassword',
+    },
+  ],
+);
+```
+
+## Runtime Permissions
+
+Request permissions before streaming:
+
+```dart
+import 'package:permission_handler/permission_handler.dart';
+
+Future<bool> requestPermissions() async {
+  Map<Permission, PermissionStatus> statuses = await [
+    Permission.camera,
+    Permission.microphone,
+  ].request();
+
+  return statuses[Permission.camera]!.isGranted &&
+         statuses[Permission.microphone]!.isGranted;
+}
+
+void startPublishingWithPermissions() async {
+  if (await requestPermissions()) {
+    await antMedia.publish();
+  } else {
+    print('Permissions not granted');
+  }
+}
+```
+
+## Resources
+
+<Card title="Flutter SDK Repository" icon="github" href="https://github.com/ant-media/WebRTC-Flutter-SDK">
+  View source code, sample apps, and contribute on GitHub
+</Card>
+
+## Requirements
+
+- Flutter 2.0 or higher
+- Dart 2.12 or higher
+- iOS 12.0 or later
+- Android 5.0 (API level 21) or higher
+- Modern web browser for web platform
+- Ant Media Server with SSL/TLS configured
+
+<Note>
+  Test your application on all target platforms (iOS, Android, Web) as WebRTC behavior may vary across platforms.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="React Native SDK" icon="react" href="/sdks/react-native">
+    Build with React Native for cross-platform apps
+  </Card>
+  
+  <Card title="Authentication" icon="shield-halved" href="/security/authentication">
+    Secure streams with token authentication
+  </Card>
+</CardGroup>

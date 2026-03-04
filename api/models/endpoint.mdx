@@ -1,0 +1,106 @@
+---
+title: Endpoint
+description: The Endpoint model represents RTMP/SRT streaming endpoints such as Facebook, YouTube, Twitter, or custom RTMP destinations.
+---
+
+The Endpoint object is used within the Broadcast model to define external streaming destinations. It allows you to restream your broadcast to social media platforms or custom RTMP/SRT servers.
+
+## Model Structure
+
+<ResponseField name="endpointServiceId" type="string" required>
+  The endpoint service ID. This field serves as the unique identifier for the endpoint
+</ResponseField>
+
+<ResponseField name="endpointUrl" type="string">
+  RTMP or SRT URL of the endpoint where the stream will be published
+</ResponseField>
+
+<ResponseField name="type" type="string">
+  The service name of the endpoint. Can be predefined service names like `facebook`, `periscope`, `youtube`, or `generic` for custom endpoints
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Status of the RTMP/SRT muxer. Possible values: `created`, `started`, `finished`, `failed`, `broadcasting`
+</ResponseField>
+
+## Field Details
+
+### endpointUrl
+
+The `endpointUrl` field contains the complete streaming URL including the stream key. For social media platforms:
+
+- **Facebook Live**: `rtmp://live-api-s.facebook.com:80/rtmp/{stream-key}`
+- **YouTube Live**: `rtmp://a.rtmp.youtube.com/live2/{stream-key}`
+- **Twitter/Periscope**: Platform-specific RTMP URL
+- **Custom RTMP**: Any valid RTMP URL (e.g., `rtmp://example.com/live/stream-key`)
+- **SRT**: SRT protocol URL (e.g., `srt://example.com:port`)
+
+### type
+
+The `type` field helps categorize the endpoint. While it can match predefined service names, you can also use `generic` for custom RTMP/SRT servers.
+
+### status
+
+The status field tracks the current state of the streaming endpoint:
+
+- `created` - Endpoint has been created but streaming hasn't started
+- `started` - Endpoint connection has been initiated
+- `broadcasting` - Successfully streaming to the endpoint
+- `finished` - Streaming to endpoint has completed
+- `failed` - Streaming to endpoint has failed (connection error, authentication failure, etc.)
+
+## Example JSON
+
+```json
+{
+  "endpointServiceId": "endpoint-12345",
+  "endpointUrl": "rtmp://live-api-s.facebook.com:80/rtmp/FB-1234567890-0-AbCdEfGhIj",
+  "type": "facebook",
+  "status": "broadcasting"
+}
+```
+
+## Multiple Endpoint Example
+
+A broadcast can have multiple endpoints for simultaneous restreaming:
+
+```json
+{
+  "streamId": "test-stream-123",
+  "name": "My Multi-Platform Stream",
+  "endPointList": [
+    {
+      "endpointServiceId": "facebook-endpoint",
+      "endpointUrl": "rtmp://live-api-s.facebook.com:80/rtmp/FB-KEY",
+      "type": "facebook",
+      "status": "broadcasting"
+    },
+    {
+      "endpointServiceId": "youtube-endpoint",
+      "endpointUrl": "rtmp://a.rtmp.youtube.com/live2/YT-KEY",
+      "type": "youtube",
+      "status": "broadcasting"
+    },
+    {
+      "endpointServiceId": "custom-endpoint",
+      "endpointUrl": "rtmp://custom-server.com/live/stream-key",
+      "type": "generic",
+      "status": "broadcasting"
+    }
+  ]
+}
+```
+
+## Related API Endpoints
+
+- [Add Endpoint to Broadcast](/rest-api#add-endpoint) - `POST /v2/broadcasts/{id}/endpoint`
+- [Remove Endpoint from Broadcast](/rest-api#remove-endpoint) - `DELETE /v2/broadcasts/{id}/endpoint/{endpointServiceId}`
+- [Get Broadcast with Endpoints](/rest-api#get-broadcast) - `GET /v2/broadcasts/{id}`
+
+## Usage Notes
+
+- Endpoints are part of the Broadcast model and are stored in the `endPointList` array
+- Each endpoint requires a unique `endpointServiceId` within the broadcast
+- You can add or remove endpoints while a broadcast is live
+- Failed endpoints will automatically retry connection based on server configuration
+- The status field is automatically updated by the server based on the streaming state

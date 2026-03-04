@@ -1,0 +1,338 @@
+---
+title: "Push Notifications API"
+description: "Send push notifications to subscribers"
+---
+
+## Overview
+
+The Push Notifications API allows you to send notifications to subscribers using configured push notification services (FCM, APNS, etc.). All endpoints are prefixed with `/v2/push-notification`.
+
+## Get Subscriber Authentication Token
+
+Generate a JWT authentication token for a subscriber.
+
+```bash GET /v2/push-notification/subscriber-auth-token
+curl -X GET "https://example.com:5443/LiveApp/rest/v2/push-notification/subscriber-auth-token?subscriberId=user123&timeoutSeconds=3600" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField query="subscriberId" type="string" required>
+  Subscriber ID to generate token for
+</ParamField>
+
+<ParamField query="timeoutSeconds" type="integer" default="3600">
+  Token validity duration in seconds (default: 1 hour)
+</ParamField>
+
+<ResponseField name="success" type="boolean">
+  Whether token generation succeeded
+</ResponseField>
+
+<ResponseField name="dataId" type="string">
+  The generated JWT token
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Description: "Token is available in dataId field"
+</ResponseField>
+
+**Example Response:**
+```json
+{
+  "success": true,
+  "dataId": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "message": "Token is available in dataId field"
+}
+```
+
+## Send Notification to Subscribers
+
+Send a push notification to specific subscribers.
+
+```bash POST /v2/push-notification/subscribers
+curl -X POST "https://example.com:5443/LiveApp/rest/v2/push-notification/subscribers?serviceName=fcm" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer {jwt}" \
+  -d '{
+    "subscribers": ["user123", "user456", "user789"],
+    "jsonMessage": "{\"title\":\"New Stream\",\"body\":\"Your favorite streamer is live!\"}"
+  }'
+```
+
+<ParamField body="subscribers" type="string[]" required>
+  Array of subscriber IDs to send notification to
+</ParamField>
+
+<ParamField body="jsonMessage" type="string" required>
+  JSON-formatted notification message as a string
+</ParamField>
+
+<ParamField query="serviceName" type="string">
+  Name of the push notification service to use. If not specified, uses the default service.
+</ParamField>
+
+<ResponseField name="success" type="boolean">
+  Whether notification was sent successfully
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Result message or error description
+</ResponseField>
+
+**Example Notification Message:**
+```json
+{
+  "title": "Stream Started",
+  "body": "John Doe has started a new live stream",
+  "data": {
+    "streamId": "stream123",
+    "action": "join_stream"
+  }
+}
+```
+
+<Warning>
+The `jsonMessage` parameter must be a JSON string (not a JSON object). The API will parse it internally.
+</Warning>
+
+## Send Notification to Topic
+
+Send a push notification to all subscribers of a topic.
+
+```bash POST /v2/push-notification/topics/{topic}
+curl -X POST "https://example.com:5443/LiveApp/rest/v2/push-notification/topics/sports?serviceName=fcm" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer {jwt}" \
+  -d '{
+    "title": "Live Match",
+    "body": "Football match is starting now!",
+    "streamId": "match123"
+  }'
+```
+
+<ParamField path="topic" type="string" required>
+  Topic name to send notification to
+</ParamField>
+
+<ParamField body="title" type="string">
+  Notification title
+</ParamField>
+
+<ParamField body="body" type="string">
+  Notification message body
+</ParamField>
+
+<ParamField body="data" type="object">
+  Additional data payload for the notification
+</ParamField>
+
+<ParamField query="serviceName" type="string">
+  Name of the push notification service to use
+</ParamField>
+
+<ResponseField name="success" type="boolean">
+  Whether notification was sent successfully
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Result message or error description
+</ResponseField>
+
+**Example Request Body:**
+```json
+{
+  "title": "New Content Available",
+  "body": "Check out the latest videos in Sports category",
+  "data": {
+    "category": "sports",
+    "action": "open_category"
+  },
+  "imageUrl": "https://example.com/thumbnail.jpg"
+}
+```
+
+## Push Notification Services
+
+### Supported Services
+
+Ant Media Server supports multiple push notification services:
+
+- **FCM** (Firebase Cloud Messaging) - For Android and iOS
+- **APNS** (Apple Push Notification Service) - For iOS
+- Custom notification services via plugins
+
+### Configuration
+
+Push notification services must be configured in the application settings before use. Each service requires specific credentials:
+
+**FCM Configuration:**
+- Service account JSON file
+- Project ID
+
+**APNS Configuration:**
+- Certificate file
+- Private key
+- Team ID
+- Bundle ID
+
+### Service Selection
+
+If multiple notification services are configured:
+
+- **Without `serviceName` parameter**: Uses the default/first configured service
+- **With `serviceName` parameter**: Uses the specified service
+
+```bash
+# Use default service
+curl -X POST ".../subscribers"
+
+# Use specific service
+curl -X POST ".../subscribers?serviceName=fcm"
+curl -X POST ".../subscribers?serviceName=apns"
+```
+
+## Notification Message Format
+
+### Standard Fields
+
+Most push notification services support these standard fields:
+
+<ResponseField name="title" type="string">
+  Notification title displayed prominently
+</ResponseField>
+
+<ResponseField name="body" type="string">
+  Main notification message text
+</ResponseField>
+
+<ResponseField name="imageUrl" type="string">
+  URL to an image to display in the notification
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Custom data payload passed to the app
+</ResponseField>
+
+### FCM-Specific Fields
+
+For Firebase Cloud Messaging, you can include:
+
+```json
+{
+  "title": "New Message",
+  "body": "You have a new message",
+  "data": {
+    "messageId": "msg123",
+    "senderId": "user456"
+  },
+  "android": {
+    "priority": "high",
+    "notification": {
+      "sound": "default",
+      "color": "#FF0000"
+    }
+  },
+  "apns": {
+    "payload": {
+      "aps": {
+        "badge": 1,
+        "sound": "default"
+      }
+    }
+  }
+}
+```
+
+## Use Cases
+
+### Notify Subscribers When Stream Starts
+
+```javascript
+// When a stream goes live
+fetch('https://example.com:5443/LiveApp/rest/v2/push-notification/subscribers', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer ' + jwtToken
+  },
+  body: JSON.stringify({
+    subscribers: ['user1', 'user2', 'user3'],
+    jsonMessage: JSON.stringify({
+      title: 'Stream is Live!',
+      body: 'Your favorite streamer just went live',
+      data: {
+        streamId: 'stream123',
+        action: 'join_stream'
+      }
+    })
+  })
+});
+```
+
+### Notify Topic Subscribers
+
+```javascript
+// Notify all subscribers of a sports topic
+fetch('https://example.com:5443/LiveApp/rest/v2/push-notification/topics/sports', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer ' + jwtToken
+  },
+  body: JSON.stringify({
+    title: 'Live Match Starting',
+    body: 'Football: Team A vs Team B',
+    data: {
+      streamId: 'match123',
+      sport: 'football'
+    },
+    imageUrl: 'https://example.com/match-thumbnail.jpg'
+  })
+});
+```
+
+## Error Handling
+
+### Common Errors
+
+**Invalid JSON Message:**
+```json
+{
+  "success": false,
+  "message": "JSON content cannot be parsed. Make sure JSON content is in correct format"
+}
+```
+
+**Blank Subscriber ID:**
+```json
+{
+  "success": false,
+  "message": "subscriberId is blank. Please give subscriberId as query parameter"
+}
+```
+
+**Service Not Configured:**
+```json
+{
+  "success": false,
+  "message": "Push notification service 'serviceName' is not configured"
+}
+```
+
+### Best Practices
+
+1. **Validate JSON** - Ensure your notification message is valid JSON before sending
+2. **Handle errors gracefully** - Check the `success` field in responses
+3. **Batch notifications** - Send to multiple subscribers in one request when possible
+4. **Use topics** - For broadcasting to many users, use topic-based notifications
+5. **Include data payload** - Add context data so the app can handle the notification appropriately
+
+## Integration with Subscribers
+
+Push notifications work in conjunction with the Subscriber API. To enable notifications for a subscriber:
+
+1. **Add subscriber** to a stream using `/v2/broadcasts/{id}/subscribers`
+2. **Configure** subscriber's push notification token/device ID
+3. **Send notifications** when events occur (stream start, messages, etc.)
+
+See the [Broadcasts API - Subscribers](/api/broadcasts#subscribers) section for subscriber management.

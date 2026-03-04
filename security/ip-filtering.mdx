@@ -1,0 +1,422 @@
+---
+title: IP Filtering
+description: Restrict access to Ant Media Server REST API and dashboard using IP address filtering with CIDR notation
+---
+
+## Overview
+
+IP filtering restricts access to Ant Media Server's REST API and web dashboard based on the client's IP address. This provides network-level security by allowing only trusted IP addresses or ranges to access administrative functions.
+
+## IPFilter Implementation
+
+The `IPFilter` class (`filter/IPFilter.java:18`) controls access to REST API endpoints and the management dashboard.
+
+### How IP Filtering Works
+
+```java
+public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) {
+    HttpServletRequest httpRequest = (HttpServletRequest) request;
+    
+    // Check if IP is allowed or internal cluster token is valid
+    if (isAllowed(request.getRemoteAddr()) || 
+        RestProxyFilter.isNodeCommunicationTokenValid(
+            httpRequest.getHeader("ClusterAuthorization"),
+            getAppSettings().getClusterCommunicationKey(),
+            httpRequest.getRequestURI()
+        )) {
+        chain.doFilter(request, response);
+        return;
+    }
+    
+    // Deny access
+    response.sendError(HttpServletResponse.SC_FORBIDDEN, "Not allowed IP");
+}
+```
+
+See `filter/IPFilter.java:27-43` for the complete implementation.
+
+## Enabling IP Filtering
+
+### Via REST API
+
+```bash
+curl -X PUT "https://your-server/rest/v2/applications/settings/LiveApp" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ipFilterEnabled": true,
+    "allowedCIDRList": ["192.168.1.0/24", "10.0.0.0/8"]
+  }'
+```
+
+### Via Configuration File
+
+Edit the application settings:
+
+```xml
+<bean id="app.settings" class="io.antmedia.AppSettings">
+    <property name="ipFilterEnabled" value="true"/>
+    <property name="allowedCIDRList">
+        <list>
+            <value>192.168.1.0/24</value>
+            <value>10.0.0.0/8</value>
+        </list>
+    </property>
+</bean>
+```
+
+## CIDR Notation
+
+IP filtering uses CIDR (Classless Inter-Domain Routing) notation to define IP ranges.
+
+### CIDR Format
+
+```
+<IP Address>/<Prefix Length>
+```
+
+Examples:
+- `192.168.1.0/24` - Allows 192.168.1.0 through 192.168.1.255 (256 addresses)
+- `10.0.0.0/8` - Allows 10.0.0.0 through 10.255.255.255 (16,777,216 addresses)
+- `172.16.0.0/12` - Allows 172.16.0.0 through 172.31.255.255 (1,048,576 addresses)
+- `203.0.113.5/32` - Allows only 203.0.113.5 (single IP)
+
+### Common CIDR Ranges
+
+| CIDR | IP Range | Number of IPs | Use Case |
+|------|----------|---------------|----------|
+| /32 | Single IP | 1 | Specific server |
+| /24 | x.x.x.0 - x.x.x.255 | 256 | Local subnet |
+| /16 | x.x.0.0 - x.x.255.255 | 65,536 | Large network |
+| /8 | x.0.0.0 - x.255.255.255 | 16,777,216 | Class A network |
+
+## IP Validation Logic
+
+The validation process (`filter/IPFilter.java:51-65`):
+
+```java
+public boolean isAllowed(final String remoteIPAddress) {
+    AppSettings appSettings = getAppSettings();
+    boolean result = false;
+    
+    if (appSettings != null) {
+        if (appSettings.isIpFilterEnabled()) {
+            result = checkCIDRList(appSettings.getAllowedCIDRList(), remoteIPAddress);
+        } else {
+            result = true;  // Allow all if filtering is disabled
+        }
+    }
+    
+    return result;
+}
+```
+
+## CIDR Matching Implementation
+
+The `checkCIDRList` method from `AbstractFilter` (`filter/AbstractFilter.java:66-94`) handles CIDR validation:
+
+```java
+public boolean checkCIDRList(Queue<NetMask> allowedCIDRList, final String remoteIPAddress) {
+    try {
+        String ipToCheck;
+        
+        // Handle IPv4 format
+        if (InetAddresses.isInetAddress(remoteIPAddress)) {
+            ipToCheck = remoteIPAddress;
+        } else {
+            // Strip port number (e.g., Azure Application Gateway)
+            ipToCheck = remoteIPAddress.substring(0, remoteIPAddress.lastIndexOf(':'));
+        }
+        
+        // Check against each CIDR range
+        InetAddress addr = InetAddress.getByName(ipToCheck);
+        for (final NetMask nm : allowedCIDRList) {
+            if (nm.matches(addr)) {
+                return true;
+            }
+        }
+    } catch (UnknownHostException e) {
+        logger.error("Error performing CIDR filtering for IP {}", remoteIPAddress, e);
+    }
+    return false;
+}
+```
+
+## Configuration Examples
+
+### Allow Single Office IP
+
+```json
+{
+  "ipFilterEnabled": true,
+  "allowedCIDRList": ["203.0.113.50/32"]
+}
+```
+
+### Allow Local Network
+
+```json
+{
+  "ipFilterEnabled": true,
+  "allowedCIDRList": ["192.168.0.0/16"]
+}
+```
+
+### Allow Multiple Networks
+
+```json
+{
+  "ipFilterEnabled": true,
+  "allowedCIDRList": [
+    "192.168.1.0/24",
+    "10.0.0.0/8",
+    "172.16.0.0/12",
+    "203.0.113.100/32"
+  ]
+}
+```
+
+### Allow Localhost and Private Networks
+
+```json
+{
+  "ipFilterEnabled": true,
+  "allowedCIDRList": [
+    "127.0.0.1/32",
+    "192.168.0.0/16",
+    "10.0.0.0/8",
+    "172.16.0.0/12"
+  ]
+}
+```
+
+## What Gets Filtered
+
+### Protected Resources
+
+IP filtering applies to:
+- REST API endpoints (`/rest/v2/*`)
+- Web management dashboard
+- Administrative interfaces
+
+### Exceptions
+
+1. **ACM Endpoints**: Ant Certificate Manager endpoints are exempt:
+```java
+if (request.getRequestURL().toString().contains("rest/v2/acm")) {
+    chain.doFilter(request, response);  // Always allow
+    return;
+}
+```
+
+2. **Cluster Communication**: Internal cluster tokens bypass IP filtering:
+```java
+RestProxyFilter.isNodeCommunicationTokenValid(
+    httpRequest.getHeader("ClusterAuthorization"),
+    getAppSettings().getClusterCommunicationKey(),
+    httpRequest.getRequestURI()
+)
+```
+
+See `filter/IPFilter.java:33-41` for exception handling.
+
+### Not Filtered
+
+IP filtering does NOT apply to:
+- Stream playback endpoints
+- WebRTC publishing/playback
+- HLS/DASH manifest requests
+
+For stream-level access control, use [Token-Based Access](/security/token-based-access) or [JWT Authentication](/security/jwt-tokens).
+
+## Cluster Mode Considerations
+
+In cluster deployments:
+
+### Edge-Origin Communication
+
+Edge nodes must communicate with origin nodes. Use cluster authorization tokens instead of adding all edge IPs to the CIDR list:
+
+```java
+String clusterToken = httpRequest.getHeader("ClusterAuthorization");
+boolean validClusterToken = RestProxyFilter.isNodeCommunicationTokenValid(
+    clusterToken,
+    appSettings.getClusterCommunicationKey(),
+    httpRequest.getRequestURI()
+);
+```
+
+### Configuration Strategy
+
+1. **Option 1**: Add all cluster node IPs to `allowedCIDRList`
+2. **Option 2**: Use cluster communication keys and minimal CIDR list
+3. **Recommended**: Combine both for defense-in-depth
+
+## Load Balancer Considerations
+
+### X-Forwarded-For Header
+
+When behind a load balancer or proxy, the `remoteIPAddress` may be the load balancer's IP, not the client's IP.
+
+The filter handles some proxy scenarios:
+
+```java
+// Strip port number suffix (e.g., Azure Application Gateway)
+ipToCheck = remoteIPAddress.substring(0, remoteIPAddress.lastIndexOf(':'));
+```
+
+### Trusting Proxies
+
+If using a reverse proxy:
+
+1. Configure the proxy to set `X-Forwarded-For` header
+2. Add the proxy's IP to `allowedCIDRList`
+3. Consider using application-level authentication in addition to IP filtering
+
+## Security Best Practices
+
+<Warning>
+  Always use IP filtering in combination with authentication. IP addresses can be spoofed in some network configurations, so IP filtering should not be your only security mechanism.
+</Warning>
+
+<Warning>
+  Be careful with broad CIDR ranges like /8 or /16. These allow millions of IP addresses. Use the smallest range necessary for your use case.
+</Warning>
+
+<Warning>
+  When enabling IP filtering for the first time, ensure you include your own IP address in the allowed list. Otherwise, you may lock yourself out.
+</Warning>
+
+<Warning>
+  Document your CIDR configuration. Future administrators need to know which ranges are allowed and why.
+</Warning>
+
+<Warning>
+  Test IP filtering in a development environment before applying to production. Misconfiguration can block all access to your server.
+</Warning>
+
+## Use Cases
+
+### Corporate Office Access
+
+Allow only office network:
+
+```json
+{
+  "ipFilterEnabled": true,
+  "allowedCIDRList": ["203.0.113.0/24"]
+}
+```
+
+### Multi-Office Deployment
+
+Allow multiple office locations:
+
+```json
+{
+  "ipFilterEnabled": true,
+  "allowedCIDRList": [
+    "203.0.113.0/24",      // New York office
+    "198.51.100.0/24",     // London office
+    "192.0.2.0/24"         // Singapore office
+  ]
+}
+```
+
+### Development Environment
+
+Allow localhost and private networks:
+
+```json
+{
+  "ipFilterEnabled": true,
+  "allowedCIDRList": [
+    "127.0.0.1/32",
+    "192.168.0.0/16",
+    "10.0.0.0/8"
+  ]
+}
+```
+
+### VPN-Only Access
+
+Allow only VPN network:
+
+```json
+{
+  "ipFilterEnabled": true,
+  "allowedCIDRList": ["10.8.0.0/24"]
+}
+```
+
+## Monitoring and Logging
+
+Failed access attempts are logged:
+
+```
+WARN [IPFilter] Access denied for IP: 198.51.100.5
+```
+
+Monitor logs for:
+- Repeated access attempts from unauthorized IPs
+- Patterns indicating port scanning or attacks
+- Legitimate users being blocked (indicates CIDR misconfiguration)
+
+## Troubleshooting
+
+### Locked Out of Server
+
+If you've locked yourself out:
+
+1. Access server via SSH
+2. Edit application settings file directly
+3. Disable IP filtering:
+```bash
+# Set ipFilterEnabled to false in settings
+vi /usr/local/antmedia/webapps/LiveApp/WEB-INF/red5-web.properties
+```
+4. Restart Ant Media Server
+
+### IP Not Matching CIDR
+
+Check:
+1. Verify your actual IP: `curl ifconfig.me`
+2. Check CIDR notation is correct
+3. Test CIDR match: Use online CIDR calculator
+4. Review server logs for attempted IP address
+
+### Load Balancer Issues
+
+If behind a load balancer:
+1. Add load balancer IP to CIDR list
+2. Configure load balancer to preserve client IP
+3. Use application-level authentication as backup
+
+## Combining with Other Security
+
+IP filtering works best when combined with:
+
+### JWT Authentication
+```bash
+# IP filtering + JWT for API access
+curl -X GET "https://your-server/rest/v2/broadcasts" \
+  -H "Authorization: Bearer <jwt-token>"
+```
+
+### Token-Based Access
+```bash
+# IP filtering on API + tokens on streams
+curl -X POST "https://your-server/rest/v2/broadcasts/stream1/token"
+```
+
+### SSL/TLS
+```bash
+# IP filtering + encrypted connections
+https://your-server/rest/v2/broadcasts
+```
+
+## Next Steps
+
+- [JWT Tokens](/security/jwt-tokens) - Add JWT authentication
+- [Token-Based Access](/security/token-based-access) - Secure streams with tokens
+- [SSL/TLS Configuration](/security/ssl-tls) - Enable encrypted connections
+- [Authentication Overview](/security/authentication) - Learn about all security methods

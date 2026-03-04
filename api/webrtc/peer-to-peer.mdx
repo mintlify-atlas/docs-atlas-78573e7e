@@ -1,0 +1,590 @@
+---
+title: "Peer-to-Peer WebRTC"
+description: "Learn about P2P communication, conference mode, and multi-party calls with Ant Media Server"
+---
+
+## Overview
+
+Ant Media Server supports peer-to-peer (P2P) WebRTC communication, enabling direct connections between clients with the server acting as a signaling coordinator. This mode is ideal for video conferencing, multi-party calls, and interactive applications.
+
+## P2P Modes
+
+Ant Media Server offers two primary P2P modes:
+
+### 1. Mesh P2P (Peer-to-Peer)
+
+Direct connections between all participants. Each peer sends and receives streams from every other peer.
+
+**Pros:**
+- Ultra-low latency
+- No server bandwidth consumption for media
+- Direct peer communication
+
+**Cons:**
+- Limited scalability (recommended max 4-6 participants)
+- High client bandwidth requirement (N-1 uploads per peer)
+
+### 2. Conference Mode (MCU/SFU)
+
+Server-side mixing or forwarding of streams. The server handles stream distribution.
+
+**Pros:**
+- Scalable to many participants (100+ participants)
+- Lower client bandwidth (single upload)
+- Consistent quality for all participants
+
+**Cons:**
+- Slightly higher latency than mesh
+- Server bandwidth consumption
+
+## Quick Start: P2P Room
+
+### Basic P2P Example
+
+```javascript
+// Initialize WebRTC Adaptor for P2P
+var webRTCAdaptor = new WebRTCAdaptor({
+    websocket_url: "wss://your-server.com:5443/WebRTCAppEE/websocket",
+    mediaConstraints: {
+        video: true,
+        audio: true
+    },
+    peerconnection_config: {
+        iceServers: [{urls: "stun:stun1.l.google.com:19302"}]
+    },
+    sdp_constraints: {
+        OfferToReceiveAudio: true,
+        OfferToReceiveVideo: true
+    },
+    localVideoId: "localVideo",
+    callback: function(info, obj) {
+        if (info == "initialized") {
+            // Join P2P room
+            webRTCAdaptor.join(roomId);
+        }
+        else if (info == "joined") {
+            // Successfully joined room
+            console.log("Joined room: " + roomId);
+        }
+        else if (info == "newStreamAvailable") {
+            // New peer joined
+            console.log("New peer stream: " + obj.streamId);
+            playPeerStream(obj.stream, obj.streamId);
+        }
+        else if (info == "peer_connection_closed") {
+            // Peer left the room
+            console.log("Peer left: " + obj.streamId);
+            removePeerVideo(obj.streamId);
+        }
+    },
+    callbackError: function(error, message) {
+        console.log("Error: " + error);
+    }
+});
+
+// Room ID
+var roomId = "room123";
+
+// Helper function to display peer streams
+function playPeerStream(stream, streamId) {
+    var video = document.createElement("video");
+    video.id = "peer_" + streamId;
+    video.autoplay = true;
+    video.srcObject = stream;
+    document.getElementById("peers").appendChild(video);
+}
+
+function removePeerVideo(streamId) {
+    var video = document.getElementById("peer_" + streamId);
+    if (video) {
+        video.remove();
+    }
+}
+```
+
+### HTML Setup for P2P
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebRTC P2P Room</title>
+    <style>
+        #localVideo {
+            width: 300px;
+            height: 200px;
+        }
+        #peers video {
+            width: 300px;
+            height: 200px;
+            margin: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>P2P Video Room</h1>
+    
+    <div>
+        <h2>Your Video</h2>
+        <video id="localVideo" autoplay muted playsinline></video>
+    </div>
+    
+    <div>
+        <h2>Participants</h2>
+        <div id="peers"></div>
+    </div>
+    
+    <button onclick="webRTCAdaptor.join('room123')">Join Room</button>
+    <button onclick="webRTCAdaptor.leave('room123')">Leave Room</button>
+    
+    <script src="https://your-server.com:5443/WebRTCAppEE/js/webrtc_adaptor.js"></script>
+    <script>
+        // Initialize adaptor (see code above)
+    </script>
+</body>
+</html>
+```
+
+## Conference Mode
+
+### Joining a Conference Room
+
+```javascript
+var webRTCAdaptor = new WebRTCAdaptor({
+    websocket_url: "wss://your-server.com:5443/WebRTCAppEE/websocket",
+    mediaConstraints: {
+        video: true,
+        audio: true
+    },
+    peerconnection_config: {
+        iceServers: [{urls: "stun:stun1.l.google.com:19302"}]
+    },
+    sdp_constraints: {
+        OfferToReceiveAudio: true,
+        OfferToReceiveVideo: true
+    },
+    localVideoId: "localVideo",
+    callback: function(info, obj) {
+        if (info == "initialized") {
+            // Join conference room
+            webRTCAdaptor.joinRoom(roomId, streamId);
+        }
+        else if (info == "joinedTheRoom") {
+            // Successfully joined conference
+            console.log("Joined conference: " + obj.roomId);
+            console.log("Your stream ID: " + obj.streamId);
+            
+            // Play other streams in the room
+            obj.streams.forEach(function(stream) {
+                webRTCAdaptor.play(stream);
+            });
+        }
+        else if (info == "streamJoined") {
+            // New participant joined
+            console.log("New participant: " + obj.streamId);
+            webRTCAdaptor.play(obj.streamId);
+        }
+        else if (info == "streamLeaved") {
+            // Participant left
+            console.log("Participant left: " + obj.streamId);
+            removePeerVideo(obj.streamId);
+        }
+        else if (info == "play_started") {
+            // Started receiving peer stream
+            console.log("Playing peer: " + obj.streamId);
+        }
+    },
+    callbackError: function(error, message) {
+        console.log("Error: " + error);
+    }
+});
+
+var roomId = "conference123";
+var streamId = "myStream_" + Math.random().toString(36).substring(7);
+```
+
+### Conference Room Events
+
+```javascript
+callback: function(info, obj) {
+    switch(info) {
+        case "joinedTheRoom":
+            // obj.roomId - Room identifier
+            // obj.streamId - Your stream ID in the room
+            // obj.streams - Array of existing stream IDs
+            console.log("Room info:", obj);
+            break;
+            
+        case "streamJoined":
+            // obj.streamId - New participant's stream ID
+            console.log("New participant joined");
+            break;
+            
+        case "streamLeaved":
+            // obj.streamId - Participant who left
+            console.log("Participant left");
+            break;
+            
+        case "leavedFromRoom":
+            // You left the room
+            console.log("Left the room: " + obj.roomId);
+            break;
+            
+        case "roomInformation":
+            // Updated room information
+            // obj.streams - Current streams in room
+            console.log("Active streams:", obj.streams);
+            break;
+    }
+}
+```
+
+## Advanced P2P Features
+
+### Multi-Track Conference
+
+Publish and receive multiple tracks (e.g., camera + screen share):
+
+```javascript
+// Publish camera stream
+var cameraStreamId = "camera_" + userId;
+webRTCAdaptor.publish(cameraStreamId);
+
+// Publish screen share as additional track
+var screenStreamId = "screen_" + userId;
+webRTCAdaptor.publish(screenStreamId, null, null, null, {
+    video: { displaySurface: "monitor" },
+    audio: false
+});
+
+// Join room with multiple streams
+webRTCAdaptor.joinRoom(roomId, cameraStreamId);
+```
+
+### Data Channel in P2P
+
+Send text messages or data between peers:
+
+```javascript
+var webRTCAdaptor = new WebRTCAdaptor({
+    // ... other config
+    dataChannelEnabled: true,
+    callback: function(info, obj) {
+        if (info == "data_channel_opened") {
+            console.log("Data channel ready with peer: " + obj.streamId);
+        }
+        else if (info == "data_received") {
+            console.log("Message from " + obj.streamId + ": " + obj.data);
+            displayChatMessage(obj.streamId, obj.data);
+        }
+    }
+});
+
+// Send message to specific peer
+function sendMessage(message, streamId) {
+    webRTCAdaptor.sendData(streamId, message);
+}
+
+// Send message to all peers in room
+function broadcastMessage(message) {
+    webRTCAdaptor.sendData(roomId, message);
+}
+```
+
+### Audio/Video Control
+
+Mute/unmute audio and video during conference:
+
+```javascript
+// Mute/unmute microphone
+function toggleMute() {
+    webRTCAdaptor.muteLocalMic();
+}
+
+// Turn camera on/off
+function toggleCamera() {
+    webRTCAdaptor.turnOffLocalCamera();
+    // Or turn back on
+    webRTCAdaptor.turnOnLocalCamera();
+}
+
+// Switch between front/rear camera (mobile)
+function switchCamera() {
+    webRTCAdaptor.switchVideoCameraCapture(streamId);
+}
+
+// Get available devices
+navigator.mediaDevices.enumerateDevices()
+    .then(function(devices) {
+        devices.forEach(function(device) {
+            if (device.kind === 'audioinput') {
+                console.log("Microphone: " + device.label);
+            }
+            else if (device.kind === 'videoinput') {
+                console.log("Camera: " + device.label);
+            }
+        });
+    });
+```
+
+### Room Management
+
+Get room information and participant list:
+
+```javascript
+// Get room information
+webRTCAdaptor.getRoomInfo(roomId);
+
+// Callback receives room info
+callback: function(info, obj) {
+    if (info == "roomInformation") {
+        console.log("Room: " + obj.roomId);
+        console.log("Participants: " + obj.streams.length);
+        obj.streams.forEach(function(streamId) {
+            console.log("Participant: " + streamId);
+        });
+    }
+}
+
+// Leave room
+function leaveRoom() {
+    webRTCAdaptor.leaveFromRoom(roomId);
+}
+```
+
+## Signaling Protocol
+
+### P2P Signaling Flow
+
+The P2P signaling involves WebSocket messages between peers and server:
+
+```javascript
+// Client A joins room
+-> {command: "joinRoom", room: "room123", streamId: "streamA"}
+<- {command: "joinedTheRoom", streamId: "streamA", streams: ["streamB"]}
+
+// Client A creates offer for Client B
+-> {command: "takeConfiguration", streamId: "streamB", type: "offer", sdp: "..."}
+
+// Server forwards to Client B
+<- {command: "takeConfiguration", streamId: "streamA", type: "offer", sdp: "..."}
+
+// Client B creates answer
+-> {command: "takeConfiguration", streamId: "streamA", type: "answer", sdp: "..."}
+
+// ICE candidates exchanged
+-> {command: "takeCandidate", streamId: "streamB", candidate: {...}}
+<- {command: "takeCandidate", streamId: "streamA", candidate: {...}}
+```
+
+### Conference Signaling Flow
+
+```javascript
+// Join conference room
+-> {command: "joinRoom", room: "conference123", streamId: "mystream"}
+<- {command: "joinedTheRoom", streamId: "mystream", streams: [...]}
+
+// Publish your stream
+-> {command: "publish", streamId: "mystream"}
+<- {command: "start", streamId: "mystream"}
+
+// Play other participant's stream
+-> {command: "play", streamId: "otherstream"}
+<- {command: "takeConfiguration", streamId: "otherstream", type: "answer"}
+
+// New participant notification
+<- {command: "streamJoined", streamId: "newstream"}
+```
+
+## Best Practices
+
+### 1. Limit Mesh P2P Participants
+
+```javascript
+var MAX_PEERS = 4;
+
+callback: function(info, obj) {
+    if (info == "roomInformation") {
+        if (obj.streams.length >= MAX_PEERS) {
+            alert("Room is full. Please try another room.");
+            webRTCAdaptor.leaveFromRoom(roomId);
+        }
+    }
+}
+```
+
+### 2. Handle Network Quality
+
+```javascript
+callback: function(info, obj) {
+    if (info == "updated_stats") {
+        // Monitor quality for each peer
+        if (obj.videoPacketsLost > 100) {
+            console.warn("Poor connection with peer: " + obj.streamId);
+            // Notify user or adjust quality
+        }
+    }
+}
+```
+
+### 3. Graceful Disconnection
+
+```javascript
+// Leave room properly
+function disconnect() {
+    // Leave room
+    webRTCAdaptor.leaveFromRoom(roomId);
+    
+    // Stop publishing
+    webRTCAdaptor.stop(streamId);
+    
+    // Close WebSocket
+    webRTCAdaptor.closeWebSocket();
+}
+
+// Handle page unload
+window.addEventListener('beforeunload', function() {
+    disconnect();
+});
+```
+
+### 4. Audio Echo Cancellation
+
+```javascript
+mediaConstraints: {
+    video: true,
+    audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+    }
+}
+```
+
+## Complete Conference Example
+
+```javascript
+var roomId = "conference123";
+var streamId = "user_" + Math.random().toString(36).substring(7);
+var remotePeers = {};
+
+var webRTCAdaptor = new WebRTCAdaptor({
+    websocket_url: "wss://server.com:5443/WebRTCAppEE/websocket",
+    mediaConstraints: {
+        video: { width: 640, height: 480 },
+        audio: {
+            echoCancellation: true,
+            noiseSuppression: true
+        }
+    },
+    peerconnection_config: {
+        iceServers: [{urls: "stun:stun1.l.google.com:19302"}]
+    },
+    sdp_constraints: {
+        OfferToReceiveAudio: true,
+        OfferToReceiveVideo: true
+    },
+    localVideoId: "localVideo",
+    dataChannelEnabled: true,
+    callback: function(info, obj) {
+        if (info == "initialized") {
+            joinConference();
+        }
+        else if (info == "joinedTheRoom") {
+            console.log("Joined conference: " + obj.roomId);
+            // Play existing streams
+            obj.streams.forEach(function(stream) {
+                playPeer(stream);
+            });
+        }
+        else if (info == "streamJoined") {
+            console.log("New participant: " + obj.streamId);
+            playPeer(obj.streamId);
+        }
+        else if (info == "streamLeaved") {
+            console.log("Participant left: " + obj.streamId);
+            removePeer(obj.streamId);
+        }
+        else if (info == "play_started") {
+            console.log("Playing: " + obj.streamId);
+        }
+        else if (info == "data_received") {
+            handleChatMessage(obj.streamId, obj.data);
+        }
+    },
+    callbackError: function(error, message) {
+        console.error("Error: " + error + " - " + message);
+    }
+});
+
+function joinConference() {
+    webRTCAdaptor.joinRoom(roomId, streamId);
+}
+
+function playPeer(peerStreamId) {
+    webRTCAdaptor.play(peerStreamId);
+    
+    // Create video element
+    var video = document.createElement("video");
+    video.id = "peer_" + peerStreamId;
+    video.autoplay = true;
+    video.playsinline = true;
+    document.getElementById("peers").appendChild(video);
+    
+    remotePeers[peerStreamId] = video;
+}
+
+function removePeer(peerStreamId) {
+    if (remotePeers[peerStreamId]) {
+        remotePeers[peerStreamId].remove();
+        delete remotePeers[peerStreamId];
+    }
+}
+
+function sendChatMessage(message) {
+    webRTCAdaptor.sendData(roomId, JSON.stringify({
+        type: "chat",
+        message: message,
+        sender: streamId,
+        timestamp: Date.now()
+    }));
+}
+
+function handleChatMessage(senderId, data) {
+    var msg = JSON.parse(data);
+    if (msg.type == "chat") {
+        console.log(msg.sender + ": " + msg.message);
+        // Display in UI
+    }
+}
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**Issue: Peers cannot connect**
+- Verify both peers have proper ICE configuration
+- Check if TURN server is needed for restrictive networks
+- Ensure WebSocket connection is stable
+
+**Issue: Audio echo in conference**
+- Enable echo cancellation in media constraints
+- Mute local audio element (use `muted` attribute)
+- Use headphones to prevent feedback
+
+**Issue: High CPU usage with many peers**
+- Use conference mode instead of mesh for >4 participants
+- Reduce video resolution
+- Limit frame rate in constraints
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="WebRTC Overview" icon="book" href="/api/webrtc/overview">
+    Learn about WebRTC architecture and signaling
+  </Card>
+  <Card title="Publishing Streams" icon="video" href="/api/webrtc/publishing">
+    Learn how to publish WebRTC streams
+  </Card>
+</CardGroup>

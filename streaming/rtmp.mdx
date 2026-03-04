@@ -1,0 +1,504 @@
+---
+title: "RTMP Streaming"
+description: "Real-Time Messaging Protocol for live streaming with broad encoder and player compatibility"
+---
+
+## Overview
+
+RTMP (Real-Time Messaging Protocol) is a widely-supported protocol for live streaming. It's the de facto standard for streaming from encoders like OBS, vMix, and Wirecast to media servers.
+
+### Key Benefits
+
+- **Wide compatibility**: Supported by virtually all streaming software
+- **Stable**: Mature protocol with proven reliability
+- **Simple setup**: Easy to configure in most encoders
+- **Low CPU usage**: Efficient encoding and transmission
+- **Codec support**: H.264 video, AAC/MP3 audio
+
+## Publishing Streams
+
+### OBS Studio
+
+<CodeGroup>
+
+```yaml OBS Settings
+Settings → Stream:
+  Service: Custom
+  Server: rtmp://your-server.com/WebRTCAppEE
+  Stream Key: stream123
+
+Settings → Output:
+  Output Mode: Advanced
+  Encoder: x264
+  Rate Control: CBR
+  Bitrate: 2500 Kbps
+  Keyframe Interval: 2
+  Preset: veryfast
+  Profile: main
+  Tune: zerolatency
+
+Settings → Video:
+  Base Resolution: 1920x1080
+  Output Resolution: 1280x720
+  FPS: 30
+```
+
+```bash FFmpeg Command
+# Publish RTMP stream from file
+ffmpeg -re -i input.mp4 \
+  -c:v libx264 \
+  -preset veryfast \
+  -b:v 2500k \
+  -maxrate 2500k \
+  -bufsize 5000k \
+  -g 60 \
+  -c:a aac \
+  -b:a 128k \
+  -ar 44100 \
+  -f flv \
+  rtmp://your-server.com/WebRTCAppEE/stream123
+
+# Publish from webcam (Linux)
+ffmpeg -f v4l2 -i /dev/video0 \
+  -f alsa -i hw:0 \
+  -c:v libx264 \
+  -preset ultrafast \
+  -tune zerolatency \
+  -b:v 1500k \
+  -c:a aac \
+  -b:a 128k \
+  -f flv \
+  rtmp://your-server.com/WebRTCAppEE/stream123
+
+# Re-stream to Ant Media Server
+ffmpeg -i rtmp://source-server.com/live/stream \
+  -c copy \
+  -f flv \
+  rtmp://your-server.com/WebRTCAppEE/stream123
+```
+
+```python Python (OpenCV)
+import cv2
+import subprocess
+
+# RTMP URL
+rtmp_url = "rtmp://your-server.com/WebRTCAppEE/stream123"
+
+# Video capture
+cap = cv2.VideoCapture(0)
+fps = int(cap.get(cv2.CAP_PROP_FPS))
+width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+# FFmpeg command
+command = [
+    'ffmpeg',
+    '-y',
+    '-f', 'rawvideo',
+    '-vcodec', 'rawvideo',
+    '-pix_fmt', 'bgr24',
+    '-s', f'{width}x{height}',
+    '-r', str(fps),
+    '-i', '-',
+    '-c:v', 'libx264',
+    '-pix_fmt', 'yuv420p',
+    '-preset', 'ultrafast',
+    '-f', 'flv',
+    rtmp_url
+]
+
+process = subprocess.Popen(command, stdin=subprocess.PIPE)
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
+    
+    # Write frame to FFmpeg
+    process.stdin.write(frame.tobytes())
+
+cap.release()
+process.stdin.close()
+process.wait()
+```
+
+```javascript Node.js (node-media-server)
+const NodeMediaServer = require('node-media-server');
+
+const config = {
+  rtmp: {
+    port: 1935,
+    chunk_size: 60000,
+    gop_cache: true,
+    ping: 30,
+    ping_timeout: 60
+  },
+  trans: {
+    ffmpeg: '/usr/bin/ffmpeg',
+    tasks: [
+      {
+        app: 'live',
+        vc: "copy",
+        ac: "copy",
+        rtmp: true,
+        rtmpApp: 'WebRTCAppEE',
+        rtmpUrl: 'rtmp://your-server.com/WebRTCAppEE/stream123'
+      }
+    ]
+  }
+};
+
+const nms = new NodeMediaServer(config);
+nms.run();
+```
+
+</CodeGroup>
+
+### Mobile Apps
+
+<CodeGroup>
+
+```swift iOS (HaishinKit)
+import HaishinKit
+import AVFoundation
+
+class RTMPPublisher {
+    let rtmpConnection = RTMPConnection()
+    let rtmpStream: RTMPStream
+    
+    init() {
+        rtmpStream = RTMPStream(connection: rtmpConnection)
+        
+        // Video settings
+        rtmpStream.videoSettings = [
+            .width: 1280,
+            .height: 720,
+            .bitrate: 2500 * 1000,
+            .profileLevel: kVTProfileLevel_H264_Main_AutoLevel,
+            .maxKeyFrameIntervalDuration: 2
+        ]
+        
+        // Audio settings
+        rtmpStream.audioSettings = [
+            .bitrate: 128 * 1000,
+            .sampleRate: 44100
+        ]
+    }
+    
+    func startPublishing() {
+        rtmpStream.attachAudio(AVCaptureDevice.default(for: .audio))
+        rtmpStream.attachCamera(DeviceUtil.device(withPosition: .back))
+        
+        rtmpConnection.connect("rtmp://your-server.com/WebRTCAppEE")
+        rtmpStream.publish("stream123")
+    }
+    
+    func stopPublishing() {
+        rtmpStream.close()
+        rtmpConnection.close()
+    }
+}
+```
+
+```java Android (rtmp-rtsp-stream-client-java)
+import com.pedro.rtplibrary.rtmp.RtmpCamera1;
+import net.ossrs.rtmp.ConnectCheckerRtmp;
+
+public class RTMPPublisher implements ConnectCheckerRtmp {
+    private RtmpCamera1 rtmpCamera1;
+    
+    public RTMPPublisher(Context context, SurfaceView surfaceView) {
+        rtmpCamera1 = new RtmpCamera1(surfaceView, this);
+    }
+    
+    public void startPublishing() {
+        if (rtmpCamera1.prepareAudio() && rtmpCamera1.prepareVideo()) {
+            String rtmpUrl = "rtmp://your-server.com/WebRTCAppEE/stream123";
+            rtmpCamera1.startStream(rtmpUrl);
+        }
+    }
+    
+    @Override
+    public void onConnectionSuccessRtmp() {
+        Log.i("RTMP", "Connection success");
+    }
+    
+    @Override
+    public void onConnectionFailedRtmp(String reason) {
+        Log.e("RTMP", "Connection failed: " + reason);
+    }
+    
+    @Override
+    public void onDisconnectRtmp() {
+        Log.i("RTMP", "Disconnected");
+    }
+}
+```
+
+</CodeGroup>
+
+## Playing Streams
+
+### Direct RTMP Playback
+
+<CodeGroup>
+
+```bash FFplay
+# Play RTMP stream
+ffplay rtmp://your-server.com/WebRTCAppEE/stream123
+
+# Play with low latency
+ffplay -fflags nobuffer -flags low_delay \
+  rtmp://your-server.com/WebRTCAppEE/stream123
+```
+
+```javascript Video.js (RTMP)
+<link href="https://vjs.zencdn.net/7.20.3/video-js.css" rel="stylesheet" />
+<script src="https://vjs.zencdn.net/7.20.3/video.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/videojs-flash@2/dist/videojs-flash.min.js"></script>
+
+<video id="rtmp-player" class="video-js vjs-default-skin" controls>
+  <source src="rtmp://your-server.com/WebRTCAppEE/stream123" type="rtmp/mp4">
+</video>
+
+<script>
+  videojs('rtmp-player', {
+    techOrder: ['flash'],
+    flash: {
+      swf: 'path/to/video-js.swf'
+    }
+  });
+</script>
+```
+
+```python VLC Python
+import vlc
+
+# Create VLC instance
+instance = vlc.Instance('--network-caching=300')
+player = instance.media_player_new()
+
+# Load RTMP stream
+media = instance.media_new('rtmp://your-server.com/WebRTCAppEE/stream123')
+player.set_media(media)
+
+# Play
+player.play()
+```
+
+```html Flash Player (Legacy)
+<object classid="clsid:d27cdb6e-ae6d-11cf-96b8-444553540000"
+    width="640" height="480">
+  <param name="movie" value="player.swf" />
+  <param name="flashvars" 
+    value="file=rtmp://your-server.com/WebRTCAppEE/stream123" />
+  <embed src="player.swf" 
+    width="640" height="480"
+    flashvars="file=rtmp://your-server.com/WebRTCAppEE/stream123">
+  </embed>
+</object>
+```
+
+</CodeGroup>
+
+<Note>
+RTMP playback in browsers requires Flash, which is deprecated. For browser playback, convert RTMP to HLS, DASH, or WebRTC using Ant Media Server's transcoding capabilities.
+</Note>
+
+## Configuration Options
+
+### Server Configuration
+
+```properties
+# RTMP settings in application.properties
+
+# Enable/disable RTMP
+rtmp.enabled=true
+
+# RTMP port (default: 1935)
+rtmp.port=1935
+
+# RTMP ingestion buffer time (ms)
+settings.rtmpIngestBufferTimeMs=0
+
+# Accept undefined streams
+settings.acceptOnlyStreamsInDataStore=false
+
+# Recording settings
+settings.mp4MuxingEnabled=true
+settings.hlsMuxingEnabled=true
+
+# Adaptive bitrate
+settings.adaptiveResolutionsEnabled=true
+```
+
+### Encoder Settings Recommendations
+
+**For Low Latency (3-5 seconds):**
+```yaml
+Keyframe Interval: 1-2 seconds
+Bitrate Mode: CBR
+Profile: baseline or main
+Tune: zerolatency
+Buffer Size: 2x bitrate
+```
+
+**For High Quality:**
+```yaml
+Keyframe Interval: 2-4 seconds  
+Bitrate Mode: VBR or CBR
+Profile: high
+Preset: medium or slow
+Two-Pass Encoding: enabled
+```
+
+**For Low Bandwidth:**
+```yaml
+Resolution: 854x480 or lower
+Bitrate: 500-1000 Kbps
+Keyframe Interval: 2 seconds
+Preset: veryfast or ultrafast
+Profile: baseline
+```
+
+### Stream Authentication
+
+```java
+// Enable token-based security
+settings.acceptOnlyStreamsInDataStore=true
+
+// Publish URL with token
+rtmp://your-server.com/WebRTCAppEE/stream123?token=YOUR_TOKEN
+```
+
+Generate publish tokens via REST API:
+
+```bash
+curl -X PUT "https://your-server.com:5443/WebRTCAppEE/rest/v2/broadcasts/stream123" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "My Stream",
+    "type": "liveStream",
+    "streamId": "stream123"
+  }'
+```
+
+## Troubleshooting
+
+### Connection Issues
+
+**Cannot connect to RTMP server:**
+```bash
+# Test RTMP port
+telnet your-server.com 1935
+
+# Check firewall
+sudo ufw status
+sudo ufw allow 1935/tcp
+
+# Verify Ant Media Server is running
+sudo systemctl status antmedia
+```
+
+**Stream not appearing:**
+```bash
+# List active streams
+curl http://your-server.com:5080/WebRTCAppEE/rest/v2/broadcasts/list/0/10
+
+# Check server logs
+tail -f /usr/local/antmedia/log/antmedia-error.log
+```
+
+### Quality Issues
+
+**Pixelation/artifacts:**
+- Increase bitrate
+- Use slower encoding preset
+- Check network bandwidth
+- Reduce resolution
+
+**Buffering/stuttering:**
+- Decrease bitrate
+- Use faster preset (ultrafast/veryfast)
+- Check upload bandwidth
+- Reduce keyframe interval
+
+**High latency:**
+- Set keyframe interval to 1-2 seconds
+- Enable `tune=zerolatency` in encoder
+- Use CBR bitrate mode
+- Reduce server-side buffer: `rtmpIngestBufferTimeMs=0`
+
+### Debug Commands
+
+```bash
+# Monitor RTMP connections
+netstat -an | grep 1935
+
+# Check stream info with FFprobe
+ffprobe -v quiet -print_format json -show_streams \
+  rtmp://your-server.com/WebRTCAppEE/stream123
+
+# Test stream with FFmpeg
+ffmpeg -v verbose -i rtmp://your-server.com/WebRTCAppEE/stream123 \
+  -t 10 -f null -
+
+# Monitor bandwidth
+iftop -i eth0
+```
+
+## Best Practices
+
+### Production Recommendations
+
+1. **Use consistent keyframe intervals**: Set to 2 seconds for optimal HLS/DASH compatibility
+2. **Enable CBR for live streaming**: Provides predictable bandwidth usage
+3. **Set appropriate buffer sizes**: `bufsize = 2 * bitrate` 
+4. **Use authentication**: Enable token-based security for production
+5. **Monitor stream health**: Use webhooks or REST API for monitoring
+6. **Configure reconnection**: Set up automatic reconnection in encoders
+
+### Quality Presets
+
+<CodeGroup>
+
+```bash 1080p High Quality
+ffmpeg -i input.mp4 \
+  -c:v libx264 -preset medium -b:v 4500k -maxrate 4500k -bufsize 9000k \
+  -vf scale=1920:1080 -g 60 -keyint_min 60 \
+  -c:a aac -b:a 192k -ar 48000 \
+  -f flv rtmp://your-server.com/WebRTCAppEE/stream123
+```
+
+```bash 720p Standard
+ffmpeg -i input.mp4 \
+  -c:v libx264 -preset fast -b:v 2500k -maxrate 2500k -bufsize 5000k \
+  -vf scale=1280:720 -g 60 \
+  -c:a aac -b:a 128k -ar 44100 \
+  -f flv rtmp://your-server.com/WebRTCAppEE/stream123
+```
+
+```bash 480p Low Bandwidth  
+ffmpeg -i input.mp4 \
+  -c:v libx264 -preset veryfast -b:v 800k -maxrate 800k -bufsize 1600k \
+  -vf scale=854:480 -g 60 \
+  -c:a aac -b:a 96k -ar 44100 \
+  -f flv rtmp://your-server.com/WebRTCAppEE/stream123
+```
+
+</CodeGroup>
+
+## Converting RTMP to Other Formats
+
+Ant Media Server automatically converts RTMP to HLS, DASH, and WebRTC. Enable in configuration:
+
+```properties
+settings.hlsMuxingEnabled=true
+settings.dashMuxingEnabled=true
+settings.webRTCEnabled=true
+```
+
+Access converted streams:
+- **HLS**: `https://your-server.com:5443/WebRTCAppEE/streams/stream123.m3u8`
+- **DASH**: `https://your-server.com:5443/WebRTCAppEE/streams/stream123.mpd`
+- **WebRTC**: Use WebRTC player with `streamId: stream123`

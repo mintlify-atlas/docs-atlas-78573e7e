@@ -1,0 +1,757 @@
+---
+title: Troubleshooting
+description: Diagnose and resolve common issues with Ant Media Server including performance problems, streaming errors, and cluster issues
+---
+
+This guide covers common issues, diagnostic techniques, and solutions for Ant Media Server operations.
+
+## Diagnostic Tools
+
+### System Resource Information
+
+Get comprehensive system status:
+
+```bash
+# Full system diagnostics
+curl -s http://localhost:5080/rest/v2/system-resources-info | jq .
+
+# CPU usage
+curl -s http://localhost:5080/rest/v2/system-resources-info | \
+  jq '.cpuUsage'
+
+# Memory usage
+curl -s http://localhost:5080/rest/v2/system-resources-info | \
+  jq '.jvmMemoryUsage, .systemMemoryInfo'
+
+# Thread information
+curl -s http://localhost:5080/rest/v2/system-resources-info | \
+  jq '.threadInfo'
+
+# GPU status
+curl -s http://localhost:5080/rest/v2/gpu-info | jq .
+```
+
+### Thread Dumps
+
+Capture thread dumps to diagnose deadlocks and performance issues (src/main/java/io/antmedia/statistic/StatsCollector.java:577):
+
+```bash
+# Get thread dump via API
+curl -s http://localhost:5080/rest/v2/system-resources-info | \
+  jq '.threadDump' > thread-dump.json
+
+# Get JVM thread dump
+jstack <pid> > thread-dump.txt
+
+# Check for deadlocks
+curl -s http://localhost:5080/rest/v2/system-resources-info | \
+  jq '.threadInfo.deadLockedThread'
+```
+
+### Heap Dumps
+
+Capture heap dump for memory analysis:
+
+```bash
+# Request heap dump via API
+curl -X GET "http://localhost:5080/rest/v2/heap-dump" \
+  --output heap-dump.hprof
+
+# Manual heap dump
+jmap -dump:live,format=b,file=heap-dump.hprof <pid>
+
+# Analyze with jhat or Eclipse MAT
+jhat heap-dump.hprof
+# Open http://localhost:7000
+```
+
+### Log Files
+
+Key log locations:
+
+```bash
+# Application logs
+tail -f /usr/local/antmedia/log/ant-media-server.log
+
+# Access logs
+tail -f /usr/local/antmedia/log/access.log
+
+# Error logs
+tail -f /usr/local/antmedia/log/antmedia-error.log
+
+# Application-specific logs
+tail -f /usr/local/antmedia/webapps/LiveApp/logs/antmedia.log
+```
+
+## Performance Issues
+
+### High CPU Usage
+
+**Symptoms**:
+- CPU usage consistently above 75%
+- Server rejecting new streams
+- Viewers experiencing buffering
+
+**Diagnostic Steps**:
+
+```bash
+# Check CPU usage
+curl -s http://localhost:5080/rest/v2/system-resources-info | \
+  jq '.cpuUsage'
+
+# Check encoder errors
+curl -s http://localhost:5080/rest/v2/system-resources-info | \
+  jq '{encodersBlocked, encodersNotOpened, publishTimeoutErrors}'
+
+# Check active streams
+curl -s http://localhost:5080/rest/v2/system-resources-info | \
+  jq '{totalStreams, localWebRTCStreams, localLiveStreams}'
+
+# Monitor CPU over time
+watch -n 1 'curl -s http://localhost:5080/rest/v2/system-resources-info | \
+  jq -r ".cpuUsage.systemCPULoad"'
+```
+
+**Solutions**:
+
+1. **Enable GPU encoding**:
+   ```properties
+   # In application settings
+   encoderSettings.0=h264_nvenc
+   ```
+
+2. **Reduce transcoding**:
+   ```properties
+   # Disable adaptive bitrate if not needed
+   adaptiveResolutionList=
+   ```
+
+3. **Increase CPU limit**:
+   ```properties
+   # In red5.properties
+   server.cpu_limit=85
+   ```
+
+4. **Scale horizontally**: Add more origin servers
+
+5. **Optimize encoder settings**:
+   ```properties
+   # Use faster presets
+   encoderPreset=veryfast
+   ```
+
+### High Memory Usage
+
+**Symptoms**:
+- Memory usage above 75%
+- OutOfMemoryError in logs
+- Server becoming unresponsive
+
+**Diagnostic Steps**:
+
+```bash
+# Check memory usage
+curl -s http://localhost:5080/rest/v2/system-resources-info | \
+  jq '.systemMemoryInfo, .jvmMemoryUsage'
+
+# Check for memory leaks
+jstat -gc <pid> 1000 10
+
+# Monitor native memory
+curl -s http://localhost:5080/rest/v2/system-resources-info | \
+  jq '.jvmNativeMemoryUsage'
+```
+
+**Solutions**:
+
+1. **Increase JVM heap**:
+   ```bash
+   # Edit /usr/local/antmedia/antmedia
+   export JAVA_OPTS="-Xms4g -Xmx8g"
+   ```
+
+2. **Increase memory limit**:
+   ```properties
+   # In red5.properties
+   server.memory_limit=85
+   ```
+
+3. **Restart server periodically** (temporary fix):
+   ```bash
+   # Add to cron
+   0 3 * * * systemctl restart antmedia
+   ```
+
+4. **Capture and analyze heap dump**:
+   ```bash
+   curl -X GET "http://localhost:5080/rest/v2/heap-dump" -o heap.hprof
+   # Analyze with Eclipse MAT
+   ```
+
+### Database Performance Issues
+
+**Symptoms**:
+- Slow API responses
+- High database query times
+- Cluster synchronization delays
+
+**Diagnostic Steps**:
+
+```bash
+# Check database query time
+curl -s http://localhost:5080/rest/v2/system-resources-info | \
+  jq '.dbAverageQueryTimeMs'
+
+# Monitor cluster node database performance
+curl -s http://localhost:5080/rest/v2/cluster-nodes | \
+  jq '.[] | {id, dbQueryAveargeTimeMs}'
+
+# Check MongoDB slow queries
+mongo
+> db.setProfilingLevel(1, 100)  # Log queries slower than 100ms
+> db.system.profile.find().limit(10).sort({ts:-1}).pretty()
+```
+
+**Solutions**:
+
+1. **Add database indexes**:
+   ```javascript
+   // In MongoDB
+   db.broadcast.createIndex({streamId: 1})
+   db.broadcast.createIndex({status: 1})
+   db.VoD.createIndex({streamId: 1})
+   ```
+
+2. **Use faster storage**: SSD instead of HDD
+
+3. **Increase MongoDB resources**:
+   ```yaml
+   # In MongoDB config
+   storage:
+     wiredTiger:
+       engineConfig:
+         cacheSizeGB: 4
+   ```
+
+4. **Use MongoDB replica set with read preference**:
+   ```properties
+   db.host=mongodb://host1,host2,host3/antmedia?readPreference=secondaryPreferred
+   ```
+
+## Streaming Issues
+
+### Streams Not Publishing
+
+**Symptoms**:
+- Publishers can't start streams
+- "Encoder not opened" errors
+- Publish timeout errors
+
+**Diagnostic Steps**:
+
+```bash
+# Check encoder errors
+curl -s http://localhost:5080/rest/v2/system-resources-info | \
+  jq '{encodersBlocked, encodersNotOpened, publishTimeoutErrors}'
+
+# Check logs
+grep -i "encoder" /usr/local/antmedia/log/ant-media-server.log | tail -20
+
+# Test publishing via RTMP
+ffmpeg -re -i test.mp4 -c copy -f flv rtmp://localhost/LiveApp/test
+```
+
+**Solutions**:
+
+1. **Check resource limits**: CPU/memory may be at capacity
+
+2. **Verify codec support**:
+   ```bash
+   # Check FFmpeg codecs
+   ffmpeg -codecs | grep h264
+   ```
+
+3. **Check GPU availability**:
+   ```bash
+   nvidia-smi  # For NVIDIA GPUs
+   curl -s http://localhost:5080/rest/v2/gpu-info
+   ```
+
+4. **Review application settings**:
+   - Check codec settings
+   - Verify resolution limits
+   - Check bitrate constraints
+
+5. **Check network connectivity**: Firewall rules, port availability
+
+### Streams Not Playing
+
+**Symptoms**:
+- Players can't start playback
+- 404 errors on HLS manifests
+- WebRTC connection failures
+
+**Diagnostic Steps**:
+
+```bash
+# Check if stream exists
+curl -s "http://localhost:5080/LiveApp/rest/v2/broadcasts/{streamId}"
+
+# Test HLS playback
+curl -I "http://localhost:5080/LiveApp/streams/{streamId}.m3u8"
+
+# Check viewer stats
+curl -s http://localhost:5080/rest/v2/system-resources-info | \
+  jq '{webrtc: .localWebRTCViewers, hls: .localHLSViewers, dash: .localDASHViewers}'
+
+# Check logs
+grep -i "{streamId}" /usr/local/antmedia/log/ant-media-server.log
+```
+
+**Solutions**:
+
+1. **Verify stream is live**:
+   ```bash
+   curl -s "http://localhost:5080/LiveApp/rest/v2/broadcasts/{streamId}" | \
+     jq '.status'
+   ```
+
+2. **Check CORS settings** (for web players):
+   ```properties
+   # In application settings
+   allowedOrigins=*
+   ```
+
+3. **Verify WebRTC settings**:
+   - STUN/TURN configuration
+   - Port availability (UDP 50000-60000)
+   - ICE candidates
+
+4. **Test with different players**: VLC, ffplay, browser
+
+### Poor Stream Quality
+
+**Symptoms**:
+- Pixelation, artifacts
+- Buffering
+- Audio sync issues
+
+**Diagnostic Steps**:
+
+```bash
+# Check WebRTC client stats
+curl -s "http://localhost:5080/LiveApp/rest/v2/broadcasts/{streamId}/webrtc-client-stats"
+
+# Monitor bitrate
+ffprobe "http://localhost:5080/LiveApp/streams/{streamId}.m3u8" 2>&1 | \
+  grep bitrate
+
+# Check encoder settings
+curl -s "http://localhost:5080/LiveApp/rest/v2/broadcasts/{streamId}" | \
+  jq '.encoderSettings'
+```
+
+**Solutions**:
+
+1. **Increase bitrate**:
+   ```properties
+   # In application settings
+   videoBitrate=2500000  # 2.5 Mbps
+   ```
+
+2. **Adjust encoder preset**:
+   ```properties
+   # Balance quality vs performance
+   encoderPreset=medium  # slower = better quality
+   ```
+
+3. **Check network bandwidth**:
+   ```bash
+   # Test upload bandwidth
+   iperf3 -c server -u -b 5M
+   ```
+
+4. **Enable adaptive bitrate**:
+   ```properties
+   adaptiveResolutionList=240,360,480,720
+   ```
+
+## Cluster Issues
+
+### Nodes Not Joining Cluster
+
+**Symptoms**:
+- Node shows as DEAD
+- Node not visible in cluster
+- Database connection errors
+
+**Diagnostic Steps**:
+
+```bash
+# Check cluster nodes
+curl -s http://localhost:5080/rest/v2/cluster-nodes | jq .
+
+# Check database connectivity
+mongo mongodb://user:pass@mongodb-server:27017/antmedia --eval "db.stats()"
+
+# Check node logs
+grep -i "cluster" /usr/local/antmedia/log/ant-media-server.log
+
+# Verify configuration
+grep -E "clusterMode|db.type|db.host" /usr/local/antmedia/webapps/*/WEB-INF/red5-web.properties
+```
+
+**Solutions**:
+
+1. **Verify database configuration**:
+   ```properties
+   # In red5-web.properties
+   db.type=mongodb
+   db.host=mongodb://user:pass@mongodb-server:27017/antmedia
+   clusterMode=true
+   ```
+
+2. **Check network connectivity**:
+   ```bash
+   # Test MongoDB connection
+   telnet mongodb-server 27017
+   ```
+
+3. **Verify node group settings**:
+   ```properties
+   # In red5.properties
+   nodeGroup=default
+   ```
+
+4. **Check MongoDB replica set status**:
+   ```bash
+   mongo
+   > rs.status()
+   ```
+
+5. **Restart node**:
+   ```bash
+   systemctl restart antmedia
+   ```
+
+### Stream Not Found in Cluster
+
+**Symptoms**:
+- Stream published on origin, not available on edge
+- 404 errors when playing from edge
+- Cluster routing failures
+
+**Diagnostic Steps**:
+
+```bash
+# Check stream on origin
+curl -s "http://origin:5080/LiveApp/rest/v2/broadcasts/{streamId}"
+
+# Check stream on edge
+curl -s "http://edge:5080/LiveApp/rest/v2/broadcasts/{streamId}"
+
+# Check cluster nodes
+curl -s http://localhost:5080/rest/v2/cluster-nodes | \
+  jq '.[] | {id, status, nodeGroup}'
+
+# Check database
+mongo mongodb://server:27017/antmedia --eval \
+  'db.broadcast.find({streamId: "stream123"})'.
+pretty()
+```
+
+**Solutions**:
+
+1. **Verify cluster mode enabled** on all nodes
+
+2. **Check node groups match**:
+   ```bash
+   # Nodes should be in same group
+   curl -s http://localhost:5080/rest/v2/cluster-nodes | jq '.[].nodeGroup'
+   ```
+
+3. **Check database synchronization**:
+   - Ensure all nodes use same database
+   - Verify replica set is healthy
+
+4. **Restart edge nodes**:
+   ```bash
+   systemctl restart antmedia
+   ```
+
+## WebRTC Issues
+
+### ICE Connection Failures
+
+**Symptoms**:
+- WebRTC connections timeout
+- No video/audio in player
+- ICE connection state: failed
+
+**Diagnostic Steps**:
+
+```bash
+# Check STUN/TURN configuration
+curl -s "http://localhost:5080/LiveApp/rest/v2/settings" | \
+  jq '{stunServerURI, turnServerURI}'
+
+# Test STUN server
+stun stun.l.google.com:19302
+
+# Check firewall rules
+sudo iptables -L -n | grep 5000
+
+# Check UDP ports
+sudo netstat -ulnp | grep java
+```
+
+**Solutions**:
+
+1. **Configure STUN server**:
+   ```json
+   {
+     "stunServerURI": "stun:stun.l.google.com:19302"
+   }
+   ```
+
+2. **Configure TURN server** (for restrictive networks):
+   ```json
+   {
+     "turnServerURI": "turn:turn.example.com:3478",
+     "turnServerUsername": "username",
+     "turnServerCredential": "password"
+   }
+   ```
+
+3. **Open UDP ports**:
+   ```bash
+   sudo ufw allow 50000:60000/udp
+   sudo ufw allow 5080/tcp
+   ```
+
+4. **Set server public IP**:
+   ```properties
+   # In red5.properties
+   useGlobalIp=true
+   ```
+
+### High Latency
+
+**Symptoms**:
+- Delay between publisher and viewer
+- Lag in interactive applications
+- Growing buffer
+
+**Diagnostic Steps**:
+
+```bash
+# Check WebRTC client stats
+curl -s "http://localhost:5080/LiveApp/rest/v2/broadcasts/{streamId}/webrtc-client-stats" | \
+  jq '.[] | {clientId, measuredBitrate, sendBitrate}'
+
+# Check network latency
+ping -c 10 server-address
+
+# Monitor queue sizes
+curl -s http://localhost:5080/rest/v2/system-resources-info | \
+  jq '{vertxQueue, webrtcVertxQueue}'
+```
+
+**Solutions**:
+
+1. **Reduce GOP size**:
+   ```properties
+   # In application settings
+   gopSize=30  # Lower values reduce latency
+   ```
+
+2. **Use WebRTC for playback**: Lower latency than HLS
+
+3. **Optimize encoder settings**:
+   ```properties
+   encoderPreset=ultrafast
+   encoderProfile=baseline
+   zerolatency=true
+   ```
+
+4. **Check network path**: Use traceroute, check for packet loss
+
+5. **Deploy closer to users**: Use edge servers in multiple regions
+
+## System Health Checks
+
+### Automated Health Check Script
+
+```bash
+#!/bin/bash
+# health-check.sh - Comprehensive health check
+
+SERVER="http://localhost:5080"
+ERROR=0
+
+echo "=== Ant Media Server Health Check ==="
+echo ""
+
+# Check service status
+echo "1. Service Status"
+if systemctl is-active --quiet antmedia; then
+  echo "   ✓ Service is running"
+else
+  echo "   ✗ Service is not running"
+  ERROR=1
+fi
+echo ""
+
+# Check API availability
+echo "2. API Availability"
+if curl -sf "$SERVER/rest/v2/version" > /dev/null; then
+  echo "   ✓ API is responding"
+else
+  echo "   ✗ API is not responding"
+  ERROR=1
+fi
+echo ""
+
+# Check CPU usage
+echo "3. CPU Usage"
+CPU=$(curl -s "$SERVER/rest/v2/system-resources-info" | jq -r '.cpuUsage.systemCPULoad')
+if [ "$CPU" -lt 85 ]; then
+  echo "   ✓ CPU: ${CPU}%"
+else
+  echo "   ⚠ CPU: ${CPU}% (HIGH)"
+  ERROR=1
+fi
+echo ""
+
+# Check memory usage
+echo "4. Memory Usage"
+MEM_USED=$(curl -s "$SERVER/rest/v2/system-resources-info" | \
+  jq -r '.jvmMemoryUsage.inUseMemory')
+MEM_MAX=$(curl -s "$SERVER/rest/v2/system-resources-info" | \
+  jq -r '.jvmMemoryUsage.maxMemory')
+MEM_PCT=$((MEM_USED * 100 / MEM_MAX))
+if [ "$MEM_PCT" -lt 85 ]; then
+  echo "   ✓ Memory: ${MEM_PCT}%"
+else
+  echo "   ⚠ Memory: ${MEM_PCT}% (HIGH)"
+  ERROR=1
+fi
+echo ""
+
+# Check deadlocks
+echo "5. Thread Deadlocks"
+DEADLOCKS=$(curl -s "$SERVER/rest/v2/system-resources-info" | \
+  jq '.threadInfo.deadLockedThread | length')
+if [ "$DEADLOCKS" -eq 0 ]; then
+  echo "   ✓ No deadlocks detected"
+else
+  echo "   ✗ Deadlocks detected: $DEADLOCKS"
+  ERROR=1
+fi
+echo ""
+
+# Check encoder errors
+echo "6. Encoder Errors"
+ENCODER_BLOCKED=$(curl -s "$SERVER/rest/v2/system-resources-info" | \
+  jq -r '.encodersBlocked // 0')
+ENCODER_NOT_OPENED=$(curl -s "$SERVER/rest/v2/system-resources-info" | \
+  jq -r '.encodersNotOpened // 0')
+if [ "$ENCODER_BLOCKED" -eq 0 ] && [ "$ENCODER_NOT_OPENED" -eq 0 ]; then
+  echo "   ✓ No encoder errors"
+else
+  echo "   ⚠ Encoder errors - Blocked: $ENCODER_BLOCKED, Not Opened: $ENCODER_NOT_OPENED"
+fi
+echo ""
+
+# Check database
+echo "7. Database Performance"
+DB_TIME=$(curl -s "$SERVER/rest/v2/system-resources-info" | \
+  jq -r '.dbAverageQueryTimeMs // 0')
+if [ "$DB_TIME" -lt 100 ]; then
+  echo "   ✓ DB query time: ${DB_TIME}ms"
+else
+  echo "   ⚠ DB query time: ${DB_TIME}ms (SLOW)"
+fi
+echo ""
+
+if [ $ERROR -eq 0 ]; then
+  echo "=== Overall Status: HEALTHY ==="
+  exit 0
+else
+  echo "=== Overall Status: ISSUES DETECTED ==="
+  exit 1
+fi
+```
+
+Make it executable and add to monitoring:
+```bash
+chmod +x health-check.sh
+./health-check.sh
+
+# Add to cron for periodic checks
+*/5 * * * * /path/to/health-check.sh || mail -s "AMS Health Alert" admin@example.com
+```
+
+## Getting Help
+
+### Collect Diagnostic Information
+
+Before requesting support, collect:
+
+```bash
+#!/bin/bash
+# collect-diagnostics.sh
+
+OUTPUT_DIR="/tmp/ams-diagnostics-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$OUTPUT_DIR"
+
+echo "Collecting diagnostics..."
+
+# System info
+curl -s http://localhost:5080/rest/v2/system-resources-info > "$OUTPUT_DIR/system-resources.json"
+curl -s http://localhost:5080/rest/v2/version > "$OUTPUT_DIR/version.json"
+
+# Logs
+cp /usr/local/antmedia/log/*.log "$OUTPUT_DIR/"
+
+# Configuration
+cp /usr/local/antmedia/conf/red5.properties "$OUTPUT_DIR/"
+cp /usr/local/antmedia/webapps/*/WEB-INF/red5-web.properties "$OUTPUT_DIR/"
+
+# Thread dump
+jstack $(pgrep -f antmedia) > "$OUTPUT_DIR/thread-dump.txt"
+
+# Package
+tar -czf "ams-diagnostics-$(date +%Y%m%d-%H%M%S).tar.gz" -C /tmp "$(basename $OUTPUT_DIR)"
+
+echo "Diagnostics saved to: ams-diagnostics-*.tar.gz"
+```
+
+### Support Resources
+
+- **Documentation**: https://antmedia.io/docs
+- **Community Forum**: https://github.com/ant-media/Ant-Media-Server/discussions
+- **Issue Tracker**: https://github.com/ant-media/Ant-Media-Server/issues
+- **Enterprise Support**: support@antmedia.io
+
+## Common Error Messages
+
+### "Encoder blocked"
+- **Cause**: Encoder initialization taking too long
+- **Solution**: Check GPU availability, reduce resolution/bitrate
+
+### "Publish timeout"
+- **Cause**: Stream initialization exceeded timeout
+- **Solution**: Check network, reduce encoder load, increase timeout
+
+### "Not enough resource"
+- **Cause**: CPU or memory limits exceeded
+- **Solution**: Increase limits or add more servers
+
+### "Database connection failed"
+- **Cause**: Cannot connect to MongoDB
+- **Solution**: Check MongoDB status, network, credentials
+
+### "Port already in use"
+- **Cause**: Another process using same port
+- **Solution**: Check with `netstat`, kill process or change port

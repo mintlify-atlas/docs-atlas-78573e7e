@@ -1,0 +1,428 @@
+---
+title: "WebRTC Streaming"
+description: "Ultra-low latency WebRTC streaming protocol for real-time communication"
+---
+
+## Overview
+
+WebRTC (Web Real-Time Communication) provides sub-second latency streaming, making it ideal for interactive applications like video conferencing, live auctions, and real-time broadcasts. Ant Media Server supports WebRTC for both publishing and playing streams.
+
+### Key Benefits
+
+- **Ultra-low latency**: Sub-second (typically 0.5s) latency
+- **Peer-to-peer capable**: Direct browser-to-browser communication
+- **Adaptive bitrate**: Automatically adjusts quality based on network conditions
+- **Secure by default**: Encryption with DTLS and SRTP
+- **Codec support**: H.264, VP8, VP9, H.265 (HEVC), AV1, Opus audio
+
+## Publishing Streams
+
+### WebRTC SDK Publishing
+
+<CodeGroup>
+
+```javascript JavaScript SDK
+// Initialize WebRTC adaptor for publishing
+const webRTCAdaptor = new WebRTCAdaptor({
+    websocket_url: "wss://your-server.com:5443/WebRTCAppEE/websocket",
+    mediaConstraints: {
+        video: true,
+        audio: true
+    },
+    peerconnection_config: {
+        iceServers: [{ urls: "stun:stun1.l.google.com:19302" }]
+    },
+    sdp_constraints: {
+        OfferToReceiveAudio: false,
+        OfferToReceiveVideo: false
+    },
+    callback: (info, obj) => {
+        if (info === "initialized") {
+            console.log("WebRTC adaptor initialized");
+            webRTCAdaptor.publish("stream123");
+        } else if (info === "publish_started") {
+            console.log("Publishing started");
+        } else if (info === "publish_finished") {
+            console.log("Publishing finished");
+        }
+    },
+    callbackError: (error, message) => {
+        console.error("Error:", error, message);
+    }
+});
+```
+
+```html HTML Example
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebRTC Publisher</title>
+    <script src="https://your-server.com:5443/WebRTCAppEE/js/webrtc_adaptor.js"></script>
+</head>
+<body>
+    <video id="localVideo" autoplay muted></video>
+    <button onclick="startPublishing()">Start Publishing</button>
+    <button onclick="stopPublishing()">Stop Publishing</button>
+
+    <script>
+        let webRTCAdaptor;
+        const streamId = "myStream_" + Math.floor(Math.random() * 1000000);
+
+        function startPublishing() {
+            webRTCAdaptor = new WebRTCAdaptor({
+                websocket_url: "wss://your-server.com:5443/WebRTCAppEE/websocket",
+                mediaConstraints: {
+                    video: { width: 1280, height: 720 },
+                    audio: true
+                },
+                localVideoId: "localVideo",
+                callback: function(info, obj) {
+                    if (info === "initialized") {
+                        webRTCAdaptor.publish(streamId);
+                    }
+                }
+            });
+        }
+
+        function stopPublishing() {
+            webRTCAdaptor.stop(streamId);
+        }
+    </script>
+</body>
+</html>
+```
+
+```swift iOS SDK
+import AntMediaSDK
+
+class PublisherViewController: UIViewController {
+    var client: AntMediaClient!
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        
+        // Initialize client
+        client = AntMediaClient.init()
+        client.delegate = self
+        client.setOptions(
+            url: "wss://your-server.com:5443/WebRTCAppEE/websocket",
+            streamId: "stream123",
+            token: "",
+            mode: .publish
+        )
+        
+        // Set video view
+        client.setLocalView(container: localVideoView)
+        
+        // Start publishing
+        client.start()
+    }
+}
+
+extension PublisherViewController: AntMediaClientDelegate {
+    func clientDidConnect(_ client: AntMediaClient) {
+        print("Connected to server")
+    }
+    
+    func clientDidDisconnect(_ client: AntMediaClient) {
+        print("Disconnected from server")
+    }
+}
+```
+
+```java Android SDK
+import io.antmedia.webrtcandroidframework.IWebRTCClient;
+import io.antmedia.webrtcandroidframework.WebRTCClient;
+
+public class PublisherActivity extends AppCompatActivity {
+    private WebRTCClient webRTCClient;
+    private String streamId = "stream123";
+    
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_publisher);
+        
+        SurfaceViewRenderer localVideoView = findViewById(R.id.local_video_view);
+        
+        webRTCClient = new WebRTCClient(this, this);
+        webRTCClient.setVideoRenderers(localVideoView, null);
+        
+        String serverUrl = "wss://your-server.com:5443/WebRTCAppEE/websocket";
+        webRTCClient.init(serverUrl, streamId, "", 
+            webRTCMode = IWebRTCClient.MODE_PUBLISH,
+            "", // token
+            this); // IWebRTCListener
+    }
+    
+    public void startPublishing() {
+        webRTCClient.startStream();
+    }
+    
+    public void stopPublishing() {
+        webRTCClient.stopStream();
+    }
+}
+```
+
+</CodeGroup>
+
+## Playing Streams
+
+### WebRTC SDK Playback
+
+<CodeGroup>
+
+```javascript JavaScript Player
+const webRTCAdaptor = new WebRTCAdaptor({
+    websocket_url: "wss://your-server.com:5443/WebRTCAppEE/websocket",
+    mediaConstraints: {
+        video: false,
+        audio: false
+    },
+    peerconnection_config: {
+        iceServers: [{ urls: "stun:stun1.l.google.com:19302" }]
+    },
+    sdp_constraints: {
+        OfferToReceiveAudio: true,
+        OfferToReceiveVideo: true
+    },
+    remoteVideoId: "remoteVideo",
+    callback: (info, obj) => {
+        if (info === "initialized") {
+            console.log("Initialized, now playing stream");
+            webRTCAdaptor.play("stream123");
+        } else if (info === "play_started") {
+            console.log("Playback started");
+        } else if (info === "play_finished") {
+            console.log("Playback finished");
+        }
+    },
+    callbackError: (error, message) => {
+        console.error("Error:", error, message);
+    }
+});
+```
+
+```html Embedded Player
+<iframe 
+    src="https://your-server.com:5443/WebRTCAppEE/play.html?name=stream123"
+    width="100%" 
+    height="500px" 
+    frameborder="0" 
+    allowfullscreen>
+</iframe>
+```
+
+```python Python Client
+import asyncio
+from aiortc import RTCPeerConnection, RTCSessionDescription
+import websockets
+import json
+
+async def play_webrtc_stream():
+    websocket_url = "wss://your-server.com:5443/WebRTCAppEE/websocket"
+    stream_id = "stream123"
+    
+    pc = RTCPeerConnection()
+    
+    @pc.on("track")
+    async def on_track(track):
+        print(f"Receiving {track.kind} track")
+        
+        while True:
+            frame = await track.recv()
+            # Process video/audio frame
+            
+    async with websockets.connect(websocket_url) as websocket:
+        # Send play command
+        play_command = {
+            "command": "play",
+            "streamId": stream_id
+        }
+        await websocket.send(json.dumps(play_command))
+        
+        # Handle WebSocket messages
+        async for message in websocket:
+            data = json.loads(message)
+            # Process SDP and ICE candidates
+
+asyncio.run(play_webrtc_stream())
+```
+
+</CodeGroup>
+
+## Configuration Options
+
+### Server-Side Configuration
+
+Configure WebRTC settings in your application's `application.properties` or via REST API:
+
+```properties
+# Enable/disable WebRTC
+settings.webRTCEnabled=true
+
+# WebRTC port range
+settings.webRTCPortRangeMin=50000
+settings.webRTCPortRangeMax=60000
+
+# STUN server
+settings.stunServerURI=stun:stun1.l.google.com:19302
+
+# TURN server (optional)
+settings.turnServerUsername=username
+settings.turnServerCredential=password
+
+# WebRTC client start timeout
+settings.webRTCClientStartTimeoutMs=10000
+
+# VP8 support
+settings.vp8Enabled=true
+
+# H.265 support  
+settings.h265Enabled=true
+
+# Data channel enabled
+settings.dataChannelEnabled=true
+```
+
+### Client-Side Media Constraints
+
+```javascript
+const mediaConstraints = {
+    video: {
+        width: { min: 640, ideal: 1280, max: 1920 },
+        height: { min: 480, ideal: 720, max: 1080 },
+        frameRate: { ideal: 30, max: 60 },
+        facingMode: "user" // or "environment" for back camera
+    },
+    audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        sampleRate: 48000
+    }
+};
+```
+
+### Advanced PeerConnection Configuration
+
+```javascript
+const peerconnection_config = {
+    iceServers: [
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" },
+        {
+            urls: "turn:your-turn-server.com:3478",
+            username: "user",
+            credential: "pass"
+        }
+    ],
+    iceTransportPolicy: "all", // "all" or "relay"
+    bundlePolicy: "max-bundle",
+    rtcpMuxPolicy: "require"
+};
+```
+
+## Adaptive Bitrate Streaming (ABR)
+
+WebRTC adaptor in Ant Media Server automatically manages stream quality based on network conditions:
+
+```javascript
+// Enable automatic quality adaptation
+webRTCAdaptor.enableStats("stream123");
+
+// Force specific quality
+webRTCAdaptor.forceStreamQuality("stream123", 480); // 480p
+
+// Get available resolutions
+webRTCAdaptor.getStreamInfo("stream123", (info) => {
+    console.log("Available resolutions:", info.streamResolutions);
+});
+```
+
+## Troubleshooting
+
+### Common Issues
+
+#### No Video/Audio
+
+1. Check browser permissions for camera/microphone
+2. Verify HTTPS is being used (required for WebRTC)
+3. Check ICE connection state in browser console
+4. Verify firewall allows WebRTC ports (50000-60000)
+
+```javascript
+webRTCAdaptor.peerConnection.addEventListener('iceconnectionstatechange', () => {
+    console.log('ICE connection state:', webRTCAdaptor.peerConnection.iceConnectionState);
+});
+```
+
+#### High Latency
+
+- Check network conditions and bandwidth
+- Verify server is geographically close to clients
+- Reduce video resolution or bitrate
+- Enable TURN server for better connectivity
+
+#### Connection Failures
+
+1. Verify WebSocket URL is correct and accessible
+2. Check STUN/TURN server configuration
+3. Verify stream exists on server
+4. Check server logs for errors
+
+```bash
+# Check WebRTC connections
+tail -f /usr/local/antmedia/log/antmedia-error.log | grep WebRTC
+```
+
+### Debug Mode
+
+Enable detailed logging:
+
+```javascript
+const webRTCAdaptor = new WebRTCAdaptor({
+    // ... other config
+    debug: true, // Enable debug logging
+    callback: (info, obj) => {
+        console.log("Callback:", info, obj);
+    },
+    callbackError: (error, message) => {
+        console.error("Error callback:", error, message);
+    }
+});
+```
+
+## Performance Optimization
+
+### Recommended Settings for Different Use Cases
+
+**Video Conferencing:**
+```javascript
+video: { width: 640, height: 480, frameRate: 30 }
+audio: { echoCancellation: true, noiseSuppression: true }
+```
+
+**Live Broadcasting:**
+```javascript
+video: { width: 1280, height: 720, frameRate: 30 }
+audio: { sampleRate: 48000, channelCount: 2 }
+```
+
+**Screen Sharing:**
+```javascript
+video: { 
+    width: 1920, 
+    height: 1080, 
+    frameRate: 15,
+    cursor: "always"
+}
+```
+
+## API Reference
+
+For complete WebRTC API documentation, see:
+- [IWebRTCAdaptor interface](file:///home/daytona/workspace/source/src/main/java/io/antmedia/webrtc/api/IWebRTCAdaptor.java)
+- [IWebRTCClient interface](file:///home/daytona/workspace/source/src/main/java/io/antmedia/webrtc/api/IWebRTCClient.java)
+- [IWebRTCMuxer interface](file:///home/daytona/workspace/source/src/main/java/io/antmedia/webrtc/api/IWebRTCMuxer.java)

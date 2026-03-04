@@ -1,0 +1,592 @@
+---
+title: "SSL/TLS Setup"
+description: "Complete guide to configuring SSL/TLS certificates for Ant Media Server using Let's Encrypt, custom certificates, and automated renewal"
+---
+
+## Overview
+
+Ant Media Server provides built-in SSL/TLS support for secure HTTPS and RTMPS connections. The `enable_ssl.sh` script automates certificate installation using Let's Encrypt or custom certificates.
+
+## SSL Setup Methods
+
+Ant Media Server supports three SSL configuration methods:
+
+1. **Free Domain with Let's Encrypt** - Enterprise users get a free subdomain (*.antmedia.cloud)
+2. **Custom Domain with Let's Encrypt** - Use your own domain with free SSL certificate
+3. **Custom Certificate** - Install SSL certificate from your certificate provider
+
+## Prerequisites
+
+### System Requirements
+
+- Ant Media Server installed at `/usr/local/antmedia`
+- Root or sudo access
+- Required packages: `jq`, `dnsutils/bind-utils`, `iptables`, `certbot`
+
+### Network Requirements
+
+<Warning>
+Port 80 must be available for Let's Encrypt validation. The script will check if port 80 is in use and fail if blocked.
+</Warning>
+
+- Port 80 (TCP) - Required for Let's Encrypt HTTP-01 challenge
+- Port 443 or 5443 (TCP) - HTTPS traffic
+- Domain must be pointed to your server's public IP
+
+### Domain Configuration
+
+For custom domains, create an A record pointing to your server:
+
+```
+stream.yourdomain.com  →  YOUR_SERVER_PUBLIC_IP
+```
+
+Verify DNS propagation:
+
+```bash
+dig stream.yourdomain.com
+nslookup stream.yourdomain.com
+```
+
+## Method 1: Free Domain (Enterprise Only)
+
+<Note>
+This method is available only for Ant Media Server Enterprise Edition users or marketplace deployments.
+</Note>
+
+### Automatic Free Subdomain
+
+<Steps>
+  <Step title="Run SSL Script">
+    Execute the script without parameters to get a free subdomain:
+
+    ```bash
+    cd /usr/local/antmedia
+    sudo ./enable_ssl.sh
+    ```
+  </Step>
+
+  <Step title="Subdomain Assignment">
+    The script will:
+    - Generate a random subdomain: `ams-XXXXX.antmedia.cloud`
+    - Register it with Ant Media's DNS service
+    - Wait for DNS propagation
+    - Install Let's Encrypt certificate automatically
+  </Step>
+
+  <Step title="Verification">
+    Once complete, access your server:
+
+    ```
+    https://ams-XXXXX.antmedia.cloud:5443
+    ```
+  </Step>
+</Steps>
+
+### How It Works
+
+From `enable_ssl.sh:232-268`:
+
+```bash
+# Generates subdomain and validates license
+hostname="ams-$RANDOM"
+ip=`curl -s http://checkip.amazonaws.com`
+get_license_key=`cat $INSTALL_DIRECTORY/conf/red5.properties | grep "server.licence_key=*" | cut -d "=" -f 2`
+
+# Registers with Ant Media DNS service
+check_api=`curl -s -X POST -H "Content-Type: application/json" \
+  "https://route.antmedia.io/create?domain=$hostname&ip=$ip&license=$get_license_key"`
+```
+
+## Method 2: Custom Domain with Let's Encrypt
+
+### Standard Installation
+
+<Steps>
+  <Step title="Point Domain to Server">
+    Configure your DNS A record to point to your server's public IP address.
+  </Step>
+
+  <Step title="Run SSL Script with Domain">
+    ```bash
+    cd /usr/local/antmedia
+    sudo ./enable_ssl.sh -d yourdomain.com
+    ```
+
+    With email notification:
+    ```bash
+    sudo ./enable_ssl.sh -d yourdomain.com -e admin@yourdomain.com
+    ```
+  </Step>
+
+  <Step title="Certificate Installation">
+    The script will:
+    - Install `certbot` and dependencies
+    - Request certificate from Let's Encrypt
+    - Create keystore and truststore for RTMPS
+    - Configure Ant Media Server
+    - Set up auto-renewal cron job
+    - Restart the service
+  </Step>
+
+  <Step title="Verify SSL">
+    Access your server:
+    ```
+    https://yourdomain.com:5443
+    ```
+  </Step>
+</Steps>
+
+### DNS Validation (Route53)
+
+For domains behind firewalls or when port 80 is unavailable:
+
+```bash
+sudo ./enable_ssl.sh -d yourdomain.com -v route53 -e admin@yourdomain.com
+```
+
+<Warning>
+Ensure AWS credentials are configured with Route53 permissions before using DNS validation.
+</Warning>
+
+### Manual DNS Challenge
+
+For custom DNS providers:
+
+```bash
+sudo ./enable_ssl.sh -d yourdomain.com -v custom -e admin@yourdomain.com
+```
+
+Follow the prompts to add TXT records to your DNS.
+
+## Method 3: Custom SSL Certificate
+
+### Using Your Own Certificate
+
+If you have SSL certificate files from a certificate authority:
+
+<Steps>
+  <Step title="Prepare Certificate Files">
+    You need three files:
+    - `fullchain.pem` - Full certificate chain
+    - `privkey.pem` - Private key
+    - `chain.pem` - Intermediate certificate chain
+  </Step>
+
+  <Step title="Install Certificate">
+    ```bash
+    sudo ./enable_ssl.sh \
+      -f /path/to/fullchain.pem \
+      -p /path/to/privkey.pem \
+      -c /path/to/chain.pem \
+      -d yourdomain.com
+    ```
+  </Step>
+
+  <Step title="Verify Installation">
+    The script creates:
+    - Keystore at `/usr/local/antmedia/conf/keystore.jks`
+    - Truststore at `/usr/local/antmedia/conf/truststore.jks`
+    - Copies PEM files to `/usr/local/antmedia/conf/`
+  </Step>
+</Steps>
+
+## SSL Script Options
+
+### Command-Line Parameters
+
+```bash
+./enable_ssl.sh [OPTIONS]
+
+Options:
+  -d <domain>              Your domain name
+  -e <email>              Email for Let's Encrypt notifications
+  -f <fullchain_file>     Path to full chain certificate file
+  -p <private_key_file>   Path to private key file
+  -c <chain_file>         Path to certificate chain file
+  -i <install_dir>        Installation directory (default: /usr/local/antmedia)
+  -v <validation_method>  DNS validation method (route53 or custom)
+  -r                      Renew existing certificate
+  -s <true/false>         Restart service after installation (default: true)
+  -h                      Display help message
+```
+
+### Usage Examples
+
+```bash
+# Free subdomain (Enterprise only)
+sudo ./enable_ssl.sh
+
+# Custom domain with email
+sudo ./enable_ssl.sh -d stream.example.com -e admin@example.com
+
+# Custom domain without email
+sudo ./enable_ssl.sh -d stream.example.com
+
+# DNS validation with Route53
+sudo ./enable_ssl.sh -d stream.example.com -v route53 -e admin@example.com
+
+# Custom certificate
+sudo ./enable_ssl.sh \
+  -f /etc/ssl/fullchain.pem \
+  -p /etc/ssl/privkey.pem \
+  -c /etc/ssl/chain.pem \
+  -d stream.example.com
+
+# Custom installation directory
+sudo ./enable_ssl.sh -d stream.example.com -i /opt/antmedia
+
+# Renew certificate
+sudo ./enable_ssl.sh -d stream.example.com -r
+```
+
+## What the Script Does
+
+### Certificate Installation Process
+
+From `enable_ssl.sh:364-455`, the script performs:
+
+<Steps>
+  <Step title="Install Dependencies">
+    Installs required packages:
+    - Ubuntu/Debian: `certbot`, `python3-certbot-dns-route53`, `cron`, `jq`, `dnsutils`
+    - CentOS/Rocky/AlmaLinux: `certbot`, `jq`, `bind-utils`
+  </Step>
+
+  <Step title="Request Certificate">
+    Uses certbot to obtain certificate:
+
+    ```bash
+    certbot certonly --standalone --non-interactive \
+      --agree-tos --email your@email.com -d yourdomain.com
+    ```
+  </Step>
+
+  <Step title="Create Java Keystores">
+    Converts PEM files to JKS format for RTMPS:
+
+    ```bash
+    # Convert to PKCS12
+    openssl pkcs12 -export \
+      -in /etc/letsencrypt/live/yourdomain.com/fullchain.pem \
+      -inkey /etc/letsencrypt/live/yourdomain.com/privkey.pem \
+      -out fullchain_and_key.p12 \
+      -name tomcat -password pass:DOMAIN_NAME
+
+    # Import to keystore
+    keytool -importkeystore \
+      -srckeystore fullchain_and_key.p12 \
+      -srcstoretype pkcs12 \
+      -destkeystore keystore.jks \
+      -deststoretype pkcs12
+    ```
+  </Step>
+
+  <Step title="Configure Server">
+    Updates configuration files:
+
+    ```bash
+    # Set server name
+    sed -i "/server.name=/c\server.name=yourdomain.com" \
+      /usr/local/antmedia/conf/red5.properties
+
+    # Enable RTMPS
+    sed -i "/rtmps.enabled=/c\rtmps.enabled=true" \
+      /usr/local/antmedia/conf/red5.properties
+
+    # Uncomment HTTPS section in jee-container.xml
+    sed -i 's/<!-- https start/<!-- https start -->/g' \
+      /usr/local/antmedia/conf/jee-container.xml
+    sed -i 's/https end -->/<!-- https end -->/g' \
+      /usr/local/antmedia/conf/jee-container.xml
+    ```
+  </Step>
+
+  <Step title="Set Up Auto-Renewal">
+    Creates cron job for certificate renewal:
+
+    ```bash
+    # Renews every 85 days at 3 AM
+    00 03 */85 * * cd /usr/local/antmedia && ./enable_ssl.sh -d yourdomain.com -r
+    ```
+  </Step>
+
+  <Step title="Restart Service">
+    Restarts Ant Media Server to apply changes:
+
+    ```bash
+    sudo service antmedia restart
+    ```
+  </Step>
+</Steps>
+
+## Certificate Files Location
+
+### Let's Encrypt Certificates
+
+```
+/etc/letsencrypt/live/yourdomain.com/
+├── fullchain.pem    # Full certificate chain
+├── privkey.pem      # Private key
+├── chain.pem        # Intermediate certificates
+└── cert.pem         # Domain certificate
+```
+
+### Ant Media Server Configuration
+
+```
+/usr/local/antmedia/conf/
+├── keystore.jks     # Java keystore for RTMPS
+├── truststore.jks   # Java truststore for RTMPS
+├── fullchain.pem    # Copy of full chain
+├── privkey.pem      # Copy of private key
+└── chain.pem        # Copy of certificate chain
+```
+
+### Configuration Files
+
+SSL settings in `red5.properties`:
+
+```properties
+# Server domain
+server.name=yourdomain.com
+
+# HTTPS configuration
+https.port=5443
+http.ssl_certificate_file=conf/fullchain.pem
+http.ssl_certificate_chain_file=conf/chain.pem
+http.ssl_certificate_key_file=conf/privkey.pem
+
+# RTMPS configuration
+rtmps.enabled=true
+rtmps.port=8443
+rtmps.keystorepass=yourdomain.com
+rtmps.keystorefile=conf/keystore.jks
+rtmps.truststorepass=yourdomain.com
+rtmps.truststorefile=conf/truststore.jks
+```
+
+## Certificate Renewal
+
+### Automatic Renewal
+
+The script sets up automatic renewal via cron:
+
+```bash
+# View cron jobs
+sudo crontab -l
+
+# Output:
+00 03 */85 * * cd /usr/local/antmedia && ./enable_ssl.sh -d yourdomain.com -r
+```
+
+Certificates are renewed every 85 days at 3:00 AM.
+
+### Manual Renewal
+
+To manually renew:
+
+```bash
+sudo /usr/local/antmedia/enable_ssl.sh -d yourdomain.com -r
+```
+
+### Test Renewal
+
+Test renewal without actually renewing:
+
+```bash
+sudo certbot renew --dry-run
+```
+
+## Docker Deployments
+
+### SSL in Docker Containers
+
+<Steps>
+  <Step title="Ensure Port 80 is Available">
+    Map port 80 for Let's Encrypt validation:
+
+    ```yaml
+    ports:
+      - "80:5080"    # Temporary for SSL setup
+      - "443:5443"
+    ```
+  </Step>
+
+  <Step title="Execute SSL Script in Container">
+    ```bash
+    docker exec -it ant-media-server /usr/local/antmedia/enable_ssl.sh -d yourdomain.com -e admin@yourdomain.com
+    ```
+  </Step>
+
+  <Step title="Persist Certificates">
+    Mount certificate directory:
+
+    ```yaml
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - ./conf:/usr/local/antmedia/conf
+    ```
+  </Step>
+</Steps>
+
+<Note>
+In Docker, the service restart happens via `kill -HUP 1` instead of systemctl.
+</Note>
+
+## Troubleshooting
+
+### Port 80 is in Use
+
+**Error**: "Port 80 is currently in use"
+
+**Solution**:
+
+```bash
+# Find what's using port 80
+sudo lsof -i :80
+
+# Stop the service temporarily
+sudo systemctl stop nginx  # or apache2
+
+# Run SSL script
+sudo ./enable_ssl.sh -d yourdomain.com
+
+# Restart the service
+sudo systemctl start nginx
+```
+
+Alternatively, use DNS validation:
+
+```bash
+sudo ./enable_ssl.sh -d yourdomain.com -v custom
+```
+
+### Domain Not Resolving
+
+**Error**: DNS validation failure
+
+**Solution**:
+
+```bash
+# Check DNS
+dig yourdomain.com @8.8.8.8
+nslookup yourdomain.com
+
+# Wait for propagation (can take up to 48 hours)
+# Then retry
+sudo ./enable_ssl.sh -d yourdomain.com
+```
+
+### Certificate Already Exists
+
+**Error**: Certificate with the name already exists
+
+**Solution**:
+
+```bash
+# Force renewal
+sudo certbot certonly --standalone --force-renewal -d yourdomain.com
+
+# Or delete and recreate
+sudo certbot delete --cert-name yourdomain.com
+sudo ./enable_ssl.sh -d yourdomain.com
+```
+
+### Keystore Password Issues
+
+The script uses the domain name as the keystore password:
+
+```bash
+password="$domain"
+```
+
+If you need to change it, update `red5.properties`:
+
+```properties
+rtmps.keystorepass=your_new_password
+rtmps.truststorepass=your_new_password
+```
+
+### Permission Errors
+
+```bash
+# Fix certificate file permissions
+sudo chown antmedia:antmedia /usr/local/antmedia/conf/*.pem
+sudo chmod 600 /usr/local/antmedia/conf/privkey.pem
+```
+
+### RTMPS Not Working
+
+Verify RTMPS configuration:
+
+```bash
+# Check if RTMPS is enabled
+grep "rtmps.enabled" /usr/local/antmedia/conf/red5.properties
+
+# Should show:
+rtmps.enabled=true
+
+# Check keystore exists
+ls -l /usr/local/antmedia/conf/keystore.jks
+ls -l /usr/local/antmedia/conf/truststore.jks
+
+# Test RTMPS port
+sudo netstat -tulpn | grep 8443
+```
+
+## Security Best Practices
+
+<Steps>
+  <Step title="Use Strong Passwords">
+    Although the script uses domain name as password, for production, consider custom passwords:
+
+    ```bash
+    # Generate secure password
+    openssl rand -base64 32
+    ```
+  </Step>
+
+  <Step title="Restrict File Permissions">
+    ```bash
+    sudo chmod 600 /usr/local/antmedia/conf/privkey.pem
+    sudo chmod 644 /usr/local/antmedia/conf/fullchain.pem
+    sudo chown antmedia:antmedia /usr/local/antmedia/conf/*.pem
+    ```
+  </Step>
+
+  <Step title="Monitor Certificate Expiration">
+    Set up monitoring for certificate expiration:
+
+    ```bash
+    # Check expiration date
+    sudo certbot certificates
+    ```
+  </Step>
+
+  <Step title="Use HTTPS Redirects">
+    Configure your load balancer or reverse proxy to redirect HTTP to HTTPS.
+  </Step>
+</Steps>
+
+## Wildcard Certificates
+
+For wildcard certificates (*.yourdomain.com):
+
+```bash
+# Requires DNS validation
+sudo ./enable_ssl.sh -d "*.yourdomain.com" -v route53 -e admin@yourdomain.com
+
+# Or with manual DNS
+sudo certbot certonly --manual \
+  --preferred-challenges dns \
+  -d "*.yourdomain.com" \
+  -d yourdomain.com
+```
+
+## Next Steps
+
+- [Configure reverse proxy with Nginx](/deployment/ssl-setup)
+- [Set up CDN integration](/operations/scaling)
+- [Configure TURN/STUN servers](/streaming/webrtc)
+- [Implement monitoring and alerts](/operations/monitoring)

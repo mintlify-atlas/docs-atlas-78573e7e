@@ -1,0 +1,496 @@
+---
+title: Scaling
+description: Scale Ant Media Server horizontally with cluster mode for high-availability and load distribution
+---
+
+Ant Media Server Enterprise Edition supports clustering to scale horizontally across multiple servers. This guide covers cluster architecture, configuration, and best practices for scaling your streaming infrastructure.
+
+## Cluster Architecture
+
+### Components
+
+**Origin Servers**
+- Handle stream publishing
+- Process incoming RTMP, WebRTC, SRT streams
+- Perform transcoding and adaptive bitrate processing
+- Store stream data
+
+**Edge Servers**
+- Handle stream playback/distribution
+- Serve WebRTC, HLS, DASH viewers
+- Pull streams from origin servers
+- Scale independently based on viewer demand
+
+**Database**
+- MongoDB (recommended for cluster mode)
+- Stores stream metadata
+- Coordinates cluster nodes
+- Maintains application settings
+
+**Load Balancer**
+- Distributes incoming requests
+- Health checking
+- SSL termination
+- Session affinity for WebRTC
+
+## Cluster Node Management
+
+### Node Registration
+
+Cluster nodes automatically register themselves (src/main/java/io/antmedia/cluster/ClusterNode.java):
+
+```java
+public class ClusterNode {
+  private String id;           // Unique node identifier
+  private String ip;           // Node IP address
+  private long lastUpdateTime; // Last heartbeat timestamp
+  private String memory;       // Memory usage
+  private String cpu;          // CPU usage
+  private int dbQueryAverageTimeMs; // Database performance
+}
+```
+
+### Node Status
+
+Nodes report status every 5 seconds (NODE_UPDATE_PERIOD):
+
+- **ALIVE**: Last update within 20 seconds (4 × NODE_UPDATE_PERIOD)
+- **DEAD**: No update for more than 20 seconds
+
+### Check Cluster Nodes
+
+```bash
+# Get all cluster nodes
+curl -X GET "http://localhost:5080/rest/v2/cluster-nodes"
+
+# Get specific node
+curl -X GET "http://localhost:5080/rest/v2/cluster-nodes/{nodeId}"
+
+# Get node count
+curl -X GET "http://localhost:5080/rest/v2/cluster-nodes/count"
+```
+
+## Cluster Configuration
+
+### MongoDB Setup
+
+Configure MongoDB for cluster coordination:
+
+```bash
+# Install MongoDB
+sudo apt-get install -y mongodb-org
+
+# Start MongoDB
+sudo systemctl start mongod
+sudo systemctl enable mongod
+
+# Create database and user
+mongo
+> use antmedia
+> db.createUser({
+    user: "antmedia",
+    pwd: "strong_password",
+    roles: [{role: "readWrite", db: "antmedia"}]
+  })
+```
+
+### Configure Ant Media Server
+
+Edit `<AMS-DIR>/webapps/<App-Name>/WEB-INF/red5-web.properties`:
+
+```properties
+# Database configuration
+db.type=mongodb
+db.host=mongodb://antmedia:strong_password@mongodb-server:27017/antmedia
+
+# Cluster mode
+clusterMode=true
+```
+
+### Server Settings for Clustering
+
+Configure in `conf/red5.properties`:
+
+```properties
+# Use global IP for cluster communication
+useGlobalIp=true
+
+# Node group for organizing cluster
+nodeGroup=default
+
+# Server name/hostname
+server.name=origin-01.example.com
+```
+
+## Node Groups
+
+Organize cluster nodes into groups for better management:
+
+### Purpose
+
+- Organize nodes by region/data center
+- Separate origin and edge nodes
+- Route streams within node groups
+- Improve latency by keeping streams local
+
+### Configure Node Groups
+
+```properties
+# In red5.properties
+nodeGroup=us-east
+```
+
+Nodes in the same group are preferred for stream routing.
+
+## Load Balancing
+
+### Origin Server Load Balancing
+
+**Requirements**:
+- Session persistence for WebRTC publishing
+- Health checks on port 5080
+- Support for WebSocket connections
+
+**Example NGINX Configuration**:
+
+```nginx
+upstream ams_origin {
+    least_conn;  # Use least connections algorithm
+    server origin-01.example.com:5080 max_fails=3 fail_timeout=30s;
+    server origin-02.example.com:5080 max_fails=3 fail_timeout=30s;
+    server origin-03.example.com:5080 max_fails=3 fail_timeout=30s;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name publish.example.com;
+    
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+    
+    location / {
+        proxy_pass http://ams_origin;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # WebRTC requires session persistence
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+    }
+}
+```
+
+### Edge Server Load Balancing
+
+**Requirements**:
+- Round-robin or least connections
+- Health checks
+- No session persistence required (for HLS/DASH)
+- Session persistence for WebRTC playback
+
+**Example NGINX Configuration**:
+
+```nginx
+upstream ams_edge {
+    least_conn;
+    server edge-01.example.com:5080 max_fails=3 fail_timeout=30s;
+    server edge-02.example.com:5080 max_fails=3 fail_timeout=30s;
+    server edge-03.example.com:5080 max_fails=3 fail_timeout=30s;
+    server edge-04.example.com:5080 max_fails=3 fail_timeout=30s;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name play.example.com;
+    
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+    
+    # WebRTC playback (needs session persistence)
+    location ~ ^/LiveApp/websocket {
+        proxy_pass http://ams_edge;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        
+        ip_hash;  # Session persistence
+    }
+    
+    # HLS/DASH playback (no session persistence needed)
+    location ~ ^/LiveApp/streams/ {
+        proxy_pass http://ams_edge;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        
+        # Enable caching for segments
+        proxy_cache media_cache;
+        proxy_cache_valid 200 1s;
+    }
+}
+```
+
+## Scaling Strategies
+
+### Vertical Scaling
+
+Increase resources on existing servers:
+
+- **CPU**: More cores for encoding/transcoding
+- **Memory**: Support more concurrent streams
+- **GPU**: Hardware encoding for higher throughput
+- **Network**: Higher bandwidth for more viewers
+
+**When to Use**:
+- Small to medium deployments
+- Cost-effective up to a point
+- Simpler management
+
+### Horizontal Scaling
+
+Add more servers to the cluster:
+
+- **Origin Scaling**: Add origins for more publishers
+- **Edge Scaling**: Add edges for more viewers
+- **Independent Scaling**: Scale origins and edges separately
+
+**When to Use**:
+- Large deployments
+- Geographic distribution
+- High availability requirements
+- Better fault tolerance
+
+## Auto-Scaling
+
+Implement auto-scaling based on metrics:
+
+### Metrics to Monitor
+
+**For Origin Scaling**:
+- CPU usage > 75%
+- Active publishers approaching limit
+- Encoder queue depth
+- Memory usage
+
+**For Edge Scaling**:
+- CPU usage > 70%
+- Active viewers approaching limit
+- Network bandwidth utilization
+- HLS viewer count
+
+### Auto-Scaling Implementation
+
+```bash
+#!/bin/bash
+# Example auto-scaling script
+
+# Get current CPU usage
+CPU_USAGE=$(curl -s http://localhost:5080/rest/v2/system-resources-info | \
+  jq -r '.cpuUsage.systemCPULoad')
+
+# Get viewer count
+VIEWER_COUNT=$(curl -s http://localhost:5080/rest/v2/system-resources-info | \
+  jq -r '(.localWebRTCViewers + .localHLSViewers + .localDASHViewers)')
+
+VIEWER_LIMIT=1000
+
+if [ "$CPU_USAGE" -gt 75 ] || [ "$VIEWER_COUNT" -gt "$VIEWER_LIMIT" ]; then
+  echo "Scaling up: CPU=${CPU_USAGE}% Viewers=${VIEWER_COUNT}"
+  # Trigger cloud provider to add instance
+  # aws autoscaling set-desired-capacity ...
+  # gcloud compute instance-groups managed resize ...
+fi
+```
+
+### Cloud Provider Auto-Scaling
+
+**AWS Auto Scaling Group**:
+```bash
+# Create launch template with AMS pre-installed
+# Configure auto-scaling based on CloudWatch metrics
+
+aws autoscaling create-auto-scaling-group \
+  --auto-scaling-group-name ams-edge-asg \
+  --launch-template LaunchTemplateName=ams-edge \
+  --min-size 2 \
+  --max-size 10 \
+  --desired-capacity 2 \
+  --target-group-arns arn:aws:elasticloadbalancing:...
+
+# Add scaling policies
+aws autoscaling put-scaling-policy \
+  --auto-scaling-group-name ams-edge-asg \
+  --policy-name scale-up-cpu \
+  --scaling-adjustment 1 \
+  --adjustment-type ChangeInCapacity \
+  --cooldown 300
+```
+
+**GCP Managed Instance Group**:
+```bash
+# Create instance template
+gcloud compute instance-templates create ams-edge-template \
+  --machine-type=n1-standard-4 \
+  --image-family=ubuntu-2004-lts \
+  --startup-script-from-file=install-ams.sh
+
+# Create managed instance group with auto-scaling
+gcloud compute instance-groups managed create ams-edge-mig \
+  --base-instance-name=ams-edge \
+  --template=ams-edge-template \
+  --size=2 \
+  --zone=us-central1-a
+
+gcloud compute instance-groups managed set-autoscaling ams-edge-mig \
+  --max-num-replicas=10 \
+  --min-num-replicas=2 \
+  --target-cpu-utilization=0.70 \
+  --cool-down-period=300
+```
+
+## Resource Limits and Capacity Planning
+
+### CPU Limits
+
+The StatsCollector monitors CPU usage (src/main/java/io/antmedia/statistic/StatsCollector.java:75):
+
+```properties
+# Configure CPU limit (10-100%)
+server.cpu_limit=75
+```
+
+When exceeded, server rejects new streams to prevent overload.
+
+### Memory Limits
+
+```properties
+# Memory limit percentage (10-100%)
+server.memory_limit=75
+```
+
+### Capacity Estimates
+
+**Origin Server** (8 vCPU, 16GB RAM):
+- ~50-100 concurrent publishers (WebRTC)
+- ~200-500 concurrent publishers (RTMP, no transcoding)
+- Depends on: resolution, bitrate, transcoding profiles
+
+**Edge Server** (8 vCPU, 16GB RAM, 1Gbps network):
+- ~2,000-5,000 HLS viewers
+- ~500-1,000 WebRTC viewers
+- ~100-200 DASH viewers
+- Depends on: bitrate, protocols, ABR profiles
+
+## High Availability
+
+### Database High Availability
+
+Use MongoDB replica set:
+
+```bash
+# Configure replica set
+mongod --replSet rs0 --bind_ip localhost,mongodb-01
+mongod --replSet rs0 --bind_ip localhost,mongodb-02
+mongod --replSet rs0 --bind_ip localhost,mongodb-03
+
+# Initialize replica set
+mongo
+> rs.initiate({
+    _id: "rs0",
+    members: [
+      {_id: 0, host: "mongodb-01:27017"},
+      {_id: 1, host: "mongodb-02:27017"},
+      {_id: 2, host: "mongodb-03:27017"}
+    ]
+  })
+```
+
+Update connection string:
+```properties
+db.host=mongodb://antmedia:password@mongodb-01:27017,mongodb-02:27017,mongodb-03:27017/antmedia?replicaSet=rs0
+```
+
+### Load Balancer High Availability
+
+- Use multiple load balancers with failover
+- DNS round-robin between load balancers
+- Cloud provider managed load balancers (AWS ALB, GCP Load Balancing)
+- Keepalived + HAProxy for self-hosted
+
+### Multi-Region Deployment
+
+Deploy clusters in multiple regions:
+
+```
+Region 1 (US-East)          Region 2 (EU-West)
+├── Origin Servers          ├── Origin Servers
+├── Edge Servers            ├── Edge Servers
+├── MongoDB                 ├── MongoDB
+└── Load Balancer          └── Load Balancer
+         ↓                           ↓
+      Global DNS/CDN (GeoDNS Routing)
+```
+
+## Performance Optimization
+
+### Database Performance
+
+Monitor database query times (src/main/java/io/antmedia/cluster/ClusterNode.java:28):
+
+```bash
+# Check database performance per app
+curl -s http://localhost:5080/rest/v2/system-resources-info | \
+  jq '.dbAverageQueryTimeMs'
+```
+
+Optimizations:
+- Add database indexes
+- Use faster storage (SSD)
+- Increase database resources
+- Use read replicas
+
+### Network Optimization
+
+- Use CDN for HLS/DASH delivery
+- Enable QUIC/HTTP3 for lower latency
+- Optimize MTU settings
+- Use dedicated network for cluster communication
+
+## Monitoring Cluster Health
+
+```bash
+#!/bin/bash
+# Cluster health check script
+
+echo "=== Cluster Node Status ==="
+curl -s http://localhost:5080/rest/v2/cluster-nodes | \
+  jq -r '.[] | "\(.id): \(.status) (CPU: \(.cpu), Memory: \(.memory))"'
+
+echo ""
+echo "=== Total Streams and Viewers ==="
+curl -s http://localhost:5080/rest/v2/system-resources-info | \
+  jq '{streams: .totalLiveStreamSize, webrtc: .localWebRTCViewers, hls: .localHLSViewers}'
+
+echo ""
+echo "=== Database Performance ==="
+curl -s http://localhost:5080/rest/v2/system-resources-info | \
+  jq '{avgQueryTime: .dbAverageQueryTimeMs}'
+```
+
+## Best Practices
+
+1. **Separate Origins and Edges**: Use dedicated servers for publishing vs playback
+2. **Monitor Node Health**: Track CPU, memory, and database performance
+3. **Use Node Groups**: Organize nodes by region/function
+4. **Database HA**: Always use MongoDB replica set in production
+5. **Load Balancer HA**: Use redundant load balancers
+6. **Auto-Scaling**: Implement automated scaling based on metrics
+7. **Capacity Planning**: Plan for peak load + 20-30% headroom
+8. **Regular Testing**: Test failover scenarios regularly
+9. **Resource Limits**: Set appropriate CPU/memory limits
+10. **Geographic Distribution**: Deploy close to users for lower latency

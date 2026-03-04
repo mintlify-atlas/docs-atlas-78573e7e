@@ -1,122 +1,168 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Ant Media Server",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#c12231",
+    "light": "#d66d70",
+    "dark": "#f49da2"
   },
-  "favicon": "/favicon.svg",
+
+  "logo": {
+    "light": "https://media.brand.dev/3627c0a8-e8cd-4b2b-aa2d-155938bc95c2.png",
+    "dark": "https://media.brand.dev/3627c0a8-e8cd-4b2b-aa2d-155938bc95c2.png"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/ant-media/Ant-Media-Server"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/ant-media/Ant-Media-Server",
+      "twitter": "https://twitter.com/antmedia_io",
+      "linkedin": "https://linkedin.com/company/antmedia"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
+              "introduction",
               "quickstart",
-              "development"
+              "installation"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/streaming-protocols",
+              "concepts/adaptive-bitrate",
+              "concepts/ultra-low-latency",
+              "concepts/architecture"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Deployment",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "deployment/linux-installation",
+              "deployment/docker",
+              "deployment/aws",
+              "deployment/azure",
+              "deployment/gcp",
+              "deployment/ssl-setup"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Configuration",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "configuration/application-settings",
+              "configuration/encoder-settings",
+              "configuration/server-settings",
+              "configuration/security"
+            ]
+          },
+          {
+            "group": "Streaming",
+            "pages": [
+              "streaming/webrtc",
+              "streaming/rtmp",
+              "streaming/srt",
+              "streaming/hls",
+              "streaming/cmaf",
+              "streaming/rtsp"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/recording",
+              "features/transcoding",
+              "features/clustering",
+              "features/ip-camera-streaming",
+              "features/push-notifications",
+              "features/webhooks"
+            ]
+          },
+          {
+            "group": "Security",
+            "pages": [
+              "security/authentication",
+              "security/token-based-access",
+              "security/jwt-tokens",
+              "security/ip-filtering",
+              "security/ssl-tls"
+            ]
+          },
+          {
+            "group": "Storage",
+            "pages": [
+              "storage/overview",
+              "storage/aws-s3",
+              "storage/google-cloud-storage"
+            ]
+          },
+          {
+            "group": "SDKs",
+            "pages": [
+              "sdks/overview",
+              "sdks/javascript",
+              "sdks/android",
+              "sdks/ios",
+              "sdks/react-native",
+              "sdks/flutter"
+            ]
+          },
+          {
+            "group": "Operations",
+            "pages": [
+              "operations/monitoring",
+              "operations/analytics",
+              "operations/scaling",
+              "operations/troubleshooting"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "REST API",
             "pages": [
-              "api-reference/introduction"
+              "api/overview",
+              "api/authentication",
+              "api/broadcasts",
+              "api/vod",
+              "api/cluster",
+              "api/push-notifications"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "WebRTC API",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/webrtc/overview",
+              "api/webrtc/publishing",
+              "api/webrtc/playing",
+              "api/webrtc/peer-to-peer"
+            ]
+          },
+          {
+            "group": "Data Models",
+            "pages": [
+              "api/models/broadcast",
+              "api/models/stream",
+              "api/models/endpoint",
+              "api/models/subscriber"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

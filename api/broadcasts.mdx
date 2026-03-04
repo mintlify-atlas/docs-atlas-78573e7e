@@ -1,0 +1,599 @@
+---
+title: "Broadcasts API"
+description: "Manage live streams, IP cameras, stream sources, and recordings"
+---
+
+## Overview
+
+The Broadcasts API allows you to create and manage live streams, IP cameras, stream sources, and playlists. All endpoints are prefixed with `/v2/broadcasts`.
+
+## Create Broadcast
+
+Create a new broadcast, IP camera, or stream source.
+
+```bash POST /v2/broadcasts/create
+curl -X POST "https://example.com:5443/LiveApp/rest/v2/broadcasts/create?autoStart=false" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer {jwt}" \
+  -d '{
+    "streamId": "mystream",
+    "name": "My Live Stream",
+    "description": "Stream description",
+    "type": "liveStream"
+  }'
+```
+
+<ParamField body="streamId" type="string">
+  Custom stream ID. If empty, auto-generated. Must be unique and valid.
+</ParamField>
+
+<ParamField body="name" type="string">
+  Display name for the broadcast
+</ParamField>
+
+<ParamField body="description" type="string">
+  Description of the broadcast
+</ParamField>
+
+<ParamField body="type" type="string">
+  Broadcast type:
+  - `liveStream` - Regular live stream (RTMP/WebRTC ingested)
+  - `ipCamera` - IP Camera stream (pulled by server)
+  - `streamSource` - Stream source (pulled by server)
+  - `VoD` - Video on Demand
+  - `playlist` - Playlist
+</ParamField>
+
+<ParamField body="ipAddr" type="string">
+  IP address (for IP cameras)
+</ParamField>
+
+<ParamField body="streamUrl" type="string">
+  Stream URL (for stream sources)
+</ParamField>
+
+<ParamField body="username" type="string">
+  Username for IP camera authentication
+</ParamField>
+
+<ParamField body="password" type="string">
+  Password for IP camera authentication
+</ParamField>
+
+<ParamField body="subFolder" type="string">
+  Subfolder for storing recordings
+</ParamField>
+
+<ParamField query="autoStart" type="boolean" default="false">
+  Automatically start pulling stream (only for IP cameras and stream sources)
+</ParamField>
+
+<ResponseField name="streamId" type="string">
+  ID of the created broadcast
+</ResponseField>
+
+<ResponseField name="rtmpURL" type="string">
+  RTMP URL for publishing
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Broadcast status: `created`, `broadcasting`, `finished`
+</ResponseField>
+
+<ResponseField name="type" type="string">
+  Type of broadcast
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Broadcast name
+</ResponseField>
+
+## Get Broadcast
+
+Retrieve a broadcast object by ID.
+
+```bash GET /v2/broadcasts/{id}
+curl -X GET "https://example.com:5443/LiveApp/rest/v2/broadcasts/stream1" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="id" type="string" required>
+  Broadcast ID
+</ParamField>
+
+**Response:** Full Broadcast object with all properties.
+
+## Update Broadcast
+
+Update broadcast properties.
+
+```bash PUT /v2/broadcasts/{id}
+curl -X PUT "https://example.com:5443/LiveApp/rest/v2/broadcasts/stream1" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer {jwt}" \
+  -d '{
+    "name": "Updated Stream Name",
+    "description": "New description"
+  }'
+```
+
+<ParamField path="id" type="string" required>
+  Broadcast ID to update
+</ParamField>
+
+<ParamField body="name" type="string">
+  New broadcast name
+</ParamField>
+
+<ParamField body="description" type="string">
+  New description
+</ParamField>
+
+<ParamField body="streamUrl" type="string">
+  New stream URL (for stream sources)
+</ParamField>
+
+<ParamField body="ipAddr" type="string">
+  New IP address (for IP cameras)
+</ParamField>
+
+<ParamField body="username" type="string">
+  New username
+</ParamField>
+
+<ParamField body="password" type="string">
+  New password
+</ParamField>
+
+<ResponseField name="success" type="boolean">
+  Whether update was successful
+</ResponseField>
+
+## Delete Broadcast
+
+Delete a broadcast and stop if it's currently broadcasting.
+
+```bash DELETE /v2/broadcasts/{id}
+curl -X DELETE "https://example.com:5443/LiveApp/rest/v2/broadcasts/stream1?deleteSubtracks=true" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="id" type="string" required>
+  Broadcast ID to delete
+</ParamField>
+
+<ParamField query="deleteSubtracks" type="boolean" default="true">
+  Also delete subtracks (conference participants)
+</ParamField>
+
+<ResponseField name="success" type="boolean">
+  `true` if deleted successfully
+</ResponseField>
+
+## Delete Multiple Broadcasts
+
+Delete multiple broadcasts in bulk.
+
+```bash DELETE /v2/broadcasts/
+curl -X DELETE "https://example.com:5443/LiveApp/rest/v2/broadcasts/?ids=stream1,stream2,stream3" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField query="ids" type="string" required>
+  Comma-separated stream IDs to delete
+</ParamField>
+
+## List Broadcasts
+
+Get paginated list of broadcasts with optional filtering and sorting.
+
+```bash GET /v2/broadcasts/list/{offset}/{size}
+curl -X GET "https://example.com:5443/LiveApp/rest/v2/broadcasts/list/0/10?type_by=liveStream&sort_by=date&order_by=desc" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="offset" type="integer" required>
+  Pagination offset (starting point)
+</ParamField>
+
+<ParamField path="size" type="integer" required>
+  Number of items to fetch (max: 50)
+</ParamField>
+
+<ParamField query="type_by" type="string">
+  Filter by type: `liveStream`, `ipCamera`, `streamSource`, `VoD`
+</ParamField>
+
+<ParamField query="sort_by" type="string">
+  Sort field: `name`, `date`, `status`
+</ParamField>
+
+<ParamField query="order_by" type="string">
+  Sort order: `asc` or `desc`
+</ParamField>
+
+<ParamField query="search" type="string">
+  Search string to filter results
+</ParamField>
+
+**Response:** Array of Broadcast objects.
+
+## Get Broadcast Count
+
+Get total number of broadcasts.
+
+```bash GET /v2/broadcasts/count
+curl -X GET "https://example.com:5443/LiveApp/rest/v2/broadcasts/count" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ResponseField name="number" type="integer">
+  Total number of broadcasts
+</ResponseField>
+
+## Get Active Live Stream Count
+
+Get count of currently active live streams.
+
+```bash GET /v2/broadcasts/active-live-stream-count
+curl -X GET "https://example.com:5443/LiveApp/rest/v2/broadcasts/active-live-stream-count" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ResponseField name="number" type="integer">
+  Number of active live streams
+</ResponseField>
+
+## Stream Control
+
+### Start Stream Source
+
+Start pulling a stream source, IP camera, or playlist.
+
+```bash POST /v2/broadcasts/{id}/start
+curl -X POST "https://example.com:5443/LiveApp/rest/v2/broadcasts/stream1/start" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="id" type="string" required>
+  Broadcast ID to start
+</ParamField>
+
+### Stop Streaming
+
+Stop an active broadcast.
+
+```bash POST /v2/broadcasts/{id}/stop
+curl -X POST "https://example.com:5443/LiveApp/rest/v2/broadcasts/stream1/stop?stopSubtracks=true" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="id" type="string" required>
+  Broadcast ID to stop
+</ParamField>
+
+<ParamField query="stopSubtracks" type="boolean">
+  Also stop subtracks (conference participants)
+</ParamField>
+
+## Recording Control
+
+### Enable/Disable Recording
+
+Control recording for a specific stream.
+
+```bash PUT /v2/broadcasts/{id}/recording/{recording-status}
+curl -X PUT "https://example.com:5443/LiveApp/rest/v2/broadcasts/stream1/recording/true?recordType=mp4&resolutionHeight=720" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="id" type="string" required>
+  Stream ID
+</ParamField>
+
+<ParamField path="recording-status" type="boolean" required>
+  `true` to start recording, `false` to stop
+</ParamField>
+
+<ParamField query="recordType" type="string" default="mp4">
+  Record format: `mp4` or `webm`
+</ParamField>
+
+<ParamField query="resolutionHeight" type="integer">
+  Resolution height to record (for adaptive streaming)
+</ParamField>
+
+<ParamField query="fileName" type="string">
+  Custom base filename (without extension)
+</ParamField>
+
+## RTMP/SRT Endpoints
+
+### Add Endpoint
+
+Add an RTMP or SRT re-streaming endpoint.
+
+```bash POST /v2/broadcasts/{id}/endpoint
+curl -X POST "https://example.com:5443/LiveApp/rest/v2/broadcasts/stream1/endpoint?resolutionHeight=720" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer {jwt}" \
+  -d '{
+    "endpointUrl": "rtmp://example.com/live/stream"
+  }'
+```
+
+<ParamField path="id" type="string" required>
+  Broadcast ID
+</ParamField>
+
+<ParamField body="endpointUrl" type="string" required>
+  RTMP or SRT URL for re-streaming
+</ParamField>
+
+<ParamField query="resolutionHeight" type="integer">
+  Specific resolution to send to endpoint
+</ParamField>
+
+<ResponseField name="success" type="boolean">
+  Whether endpoint was added
+</ResponseField>
+
+<ResponseField name="dataId" type="string">
+  Generated endpoint service ID
+</ResponseField>
+
+### Remove Endpoint
+
+Remove an RTMP or SRT endpoint.
+
+```bash DELETE /v2/broadcasts/{id}/endpoint
+curl -X DELETE "https://example.com:5443/LiveApp/rest/v2/broadcasts/stream1/endpoint?endpointServiceId=custom123abc&resolutionHeight=720" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="id" type="string" required>
+  Broadcast ID
+</ParamField>
+
+<ParamField query="endpointServiceId" type="string" required>
+  Endpoint service ID to remove
+</ParamField>
+
+<ParamField query="resolutionHeight" type="integer">
+  Resolution height if endpoint was added with specific resolution
+</ParamField>
+
+## Statistics
+
+### Get Broadcast Statistics
+
+Get viewer statistics for a specific stream.
+
+```bash GET /v2/broadcasts/{id}/broadcast-statistics
+curl -X GET "https://example.com:5443/LiveApp/rest/v2/broadcasts/stream1/broadcast-statistics" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="id" type="string" required>
+  Stream ID
+</ParamField>
+
+<ResponseField name="totalRTMPWatchersCount" type="integer">
+  Number of RTMP viewers
+</ResponseField>
+
+<ResponseField name="totalHLSWatchersCount" type="integer">
+  Number of HLS viewers
+</ResponseField>
+
+<ResponseField name="totalWebRTCWatchersCount" type="integer">
+  Number of WebRTC viewers
+</ResponseField>
+
+<ResponseField name="totalDASHWatchersCount" type="integer">
+  Number of DASH viewers
+</ResponseField>
+
+### Get Total Statistics
+
+Get total viewer statistics across all streams.
+
+```bash GET /v2/broadcasts/total-broadcast-statistics
+curl -X GET "https://example.com:5443/LiveApp/rest/v2/broadcasts/total-broadcast-statistics" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ResponseField name="totalHLSWatchersCount" type="integer">
+  Total HLS viewers
+</ResponseField>
+
+<ResponseField name="totalWebRTCWatchersCount" type="integer">
+  Total WebRTC viewers
+</ResponseField>
+
+<ResponseField name="totalDASHWatchersCount" type="integer">
+  Total DASH viewers
+</ResponseField>
+
+<ResponseField name="activeLiveStreamCount" type="integer">
+  Number of active broadcasts
+</ResponseField>
+
+## Stream Information
+
+### Get Stream Info
+
+Get technical stream information (resolution, bitrates, codec).
+
+```bash GET /v2/broadcasts/{id}/stream-info
+curl -X GET "https://example.com:5443/LiveApp/rest/v2/broadcasts/stream1/stream-info" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="id" type="string" required>
+  Stream ID
+</ParamField>
+
+**Response:** Array of stream info objects containing:
+- `videoHeight` - Video resolution height
+- `videoWidth` - Video resolution width  
+- `videoBitrate` - Video bitrate
+- `audioBitrate` - Audio bitrate
+- `videoCodec` - Video codec name
+
+### Get Stream Duration
+
+Get duration of a stream URL in milliseconds.
+
+```bash GET /v2/broadcasts/duration
+curl -X GET "https://example.com:5443/LiveApp/rest/v2/broadcasts/duration?url=https://example.com/video.mp4" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField query="url" type="string" required>
+  URL of the stream to check duration
+</ParamField>
+
+<ResponseField name="success" type="boolean">
+  Whether duration was retrieved
+</ResponseField>
+
+<ResponseField name="dataId" type="string">
+  Duration in milliseconds (as string)
+</ResponseField>
+
+<ResponseField name="errorId" type="integer">
+  Error code if failed:
+  - `-1`: Duration not available
+  - `-2`: URL cannot be opened
+  - `-3`: Cannot get stream info
+</ResponseField>
+
+## Playlist Operations
+
+### Play Next Item
+
+Skip to next or specific item in a playlist.
+
+```bash POST /v2/broadcasts/playlists/{id}/next
+curl -X POST "https://example.com:5443/LiveApp/rest/v2/broadcasts/playlists/playlist1/next?index=3" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="id" type="string" required>
+  Playlist ID
+</ParamField>
+
+<ParamField query="index" type="integer">
+  Index of item to play. `-1` or omit to play next item. First item is index 0.
+</ParamField>
+
+### Seek Time
+
+Seek to specific time in a playing stream source, VoD, or playlist.
+
+```bash PUT /v2/broadcasts/{id}/seek-time/{seekTimeMs}
+curl -X PUT "https://example.com:5443/LiveApp/rest/v2/broadcasts/stream1/seek-time/30000" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="id" type="string" required>
+  Broadcast ID
+</ParamField>
+
+<ParamField path="seekTimeMs" type="integer" required>
+  Seek position in milliseconds
+</ParamField>
+
+## IP Camera Operations
+
+### Search ONVIF Devices
+
+Discover ONVIF IP cameras on the local network.
+
+```bash GET /v2/broadcasts/onvif-devices
+curl -X GET "https://example.com:5443/LiveApp/rest/v2/broadcasts/onvif-devices" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+**Response:** Array of discovered ONVIF device URLs.
+
+### Get Camera Profiles
+
+Get available profiles for an ONVIF IP camera.
+
+```bash GET /v2/broadcasts/{id}/ip-camera/device-profiles
+curl -X GET "https://example.com:5443/LiveApp/rest/v2/broadcasts/camera1/ip-camera/device-profiles" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="id" type="string" required>
+  IP Camera broadcast ID
+</ParamField>
+
+**Response:** Array of available profile names.
+
+### Move IP Camera
+
+Control PTZ (Pan-Tilt-Zoom) movements.
+
+```bash POST /v2/broadcasts/{id}/ip-camera/move
+curl -X POST "https://example.com:5443/LiveApp/rest/v2/broadcasts/camera1/ip-camera/move?valueX=0.5&valueY=0.3&movement=relative" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="id" type="string" required>
+  IP Camera ID
+</ParamField>
+
+<ParamField query="valueX" type="float" default="0">
+  Movement in X direction (-1.0 to 1.0)
+</ParamField>
+
+<ParamField query="valueY" type="float" default="0">
+  Movement in Y direction (-1.0 to 1.0)
+</ParamField>
+
+<ParamField query="valueZ" type="float" default="0">
+  Zoom value:
+  - Absolute: 0.0 to 1.0
+  - Relative/Continuous: -1.0 to 1.0
+</ParamField>
+
+<ParamField query="movement" type="string" default="relative">
+  Movement type: `relative`, `absolute`, or `continuous`
+</ParamField>
+
+### Stop Camera Movement
+
+Stop ongoing PTZ movement.
+
+```bash POST /v2/broadcasts/{id}/ip-camera/stop-move
+curl -X POST "https://example.com:5443/LiveApp/rest/v2/broadcasts/camera1/ip-camera/stop-move" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="id" type="string" required>
+  IP Camera ID
+</ParamField>
+
+### Get Camera Error
+
+Check for errors after IP camera connection failure.
+
+```bash GET /v2/broadcasts/{streamId}/ip-camera-error
+curl -X GET "https://example.com:5443/LiveApp/rest/v2/broadcasts/camera1/ip-camera-error" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="streamId" type="string" required>
+  IP Camera stream ID
+</ParamField>
+
+<ResponseField name="success" type="boolean">
+  Whether error info was retrieved
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Error message if any
+</ResponseField>

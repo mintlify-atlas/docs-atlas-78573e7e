@@ -1,0 +1,226 @@
+---
+title: "Authentication"
+description: "Token generation and validation for Ant Media Server"
+---
+
+## Overview
+
+Ant Media Server supports multiple authentication mechanisms:
+
+- **One-time tokens** - Random tokens with expiration
+- **JWT tokens** - Industry standard JSON Web Tokens
+- **TOTP** - Time-based One-Time Passwords for subscribers
+
+## Generate One-Time Token
+
+Generate a random one-time token for a specific stream.
+
+```bash GET /v2/broadcasts/{id}/token
+curl -X GET "https://example.com:5443/LiveApp/rest/v2/broadcasts/stream1/token?expireDate=1735689600&type=publish" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="id" type="string" required>
+  Stream ID to generate token for
+</ParamField>
+
+<ParamField query="expireDate" type="integer" required>
+  Token expiration time in Unix timestamp (seconds)
+</ParamField>
+
+<ParamField query="type" type="string" required>
+  Token type: `publish` or `play`
+</ParamField>
+
+<ParamField query="roomId" type="string">
+  Room ID if token is for a conference room
+</ParamField>
+
+<ResponseField name="tokenId" type="string">
+  Generated token ID
+</ResponseField>
+
+<ResponseField name="streamId" type="string">
+  Stream ID this token is valid for
+</ResponseField>
+
+<ResponseField name="expireDate" type="integer">
+  Token expiration timestamp
+</ResponseField>
+
+<ResponseField name="type" type="string">
+  Token type (publish/play)
+</ResponseField>
+
+## Generate JWT Token
+
+Generate a JWT token for a stream. Generally JWT tokens should be generated on the client side.
+
+```bash GET /v2/broadcasts/{id}/jwt-token
+curl -X GET "https://example.com:5443/LiveApp/rest/v2/broadcasts/stream1/jwt-token?expireDate=1735689600&type=publish" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="id" type="string" required>
+  Stream ID to generate JWT token for
+</ParamField>
+
+<ParamField query="expireDate" type="integer" required>
+  Token expiration time in Unix timestamp (seconds)
+</ParamField>
+
+<ParamField query="type" type="string" required>
+  Token type: `publish` or `play`
+</ParamField>
+
+<ParamField query="roomId" type="string">
+  Room ID if token is for a conference room
+</ParamField>
+
+**Response:** Same as one-time token response.
+
+## Validate Token
+
+Validate if a token is still valid and not expired.
+
+```bash POST /v2/broadcasts/validate-token
+curl -X POST "https://example.com:5443/LiveApp/rest/v2/broadcasts/validate-token" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer {jwt}" \
+  -d '{
+    "tokenId": "token123",
+    "streamId": "stream1",
+    "expireDate": 1735689600,
+    "type": "publish"
+  }'
+```
+
+<ParamField body="tokenId" type="string" required>
+  Token ID to validate
+</ParamField>
+
+<ParamField body="streamId" type="string" required>
+  Stream ID associated with the token
+</ParamField>
+
+<ParamField body="expireDate" type="integer" required>
+  Token expiration timestamp
+</ParamField>
+
+<ParamField body="type" type="string" required>
+  Token type (publish/play)
+</ParamField>
+
+<ResponseField name="success" type="boolean">
+  `true` if token is valid, `false` otherwise
+</ResponseField>
+
+## List Tokens
+
+Get all tokens for a specific stream.
+
+```bash GET /v2/broadcasts/{id}/tokens/list/{offset}/{size}
+curl -X GET "https://example.com:5443/LiveApp/rest/v2/broadcasts/stream1/tokens/list/0/10" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="id" type="string" required>
+  Stream ID to list tokens for
+</ParamField>
+
+<ParamField path="offset" type="integer" required>
+  Starting point of the list
+</ParamField>
+
+<ParamField path="size" type="integer" required>
+  Number of tokens to return (max: 50)
+</ParamField>
+
+**Response:** Array of token objects.
+
+## Revoke All Tokens
+
+Remove all tokens associated with a stream.
+
+```bash DELETE /v2/broadcasts/{id}/tokens
+curl -X DELETE "https://example.com:5443/LiveApp/rest/v2/broadcasts/stream1/tokens" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="id" type="string" required>
+  Stream ID to revoke tokens for
+</ParamField>
+
+<ResponseField name="success" type="boolean">
+  `true` if tokens were revoked successfully
+</ResponseField>
+
+## TOTP Authentication
+
+For subscriber-based authentication, Ant Media Server supports Time-based One-Time Passwords (TOTP).
+
+### Get TOTP for Subscriber
+
+```bash GET /v2/broadcasts/{id}/subscribers/{subscriberId}/totp
+curl -X GET "https://example.com:5443/LiveApp/rest/v2/broadcasts/stream1/subscribers/subscriber123/totp?type=play" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="id" type="string" required>
+  Stream ID
+</ParamField>
+
+<ParamField path="subscriberId" type="string" required>
+  Subscriber ID to generate TOTP for
+</ParamField>
+
+<ParamField query="type" type="string">
+  Type: `publish` or `play`. Used if subscriber is not in database
+</ParamField>
+
+<ResponseField name="success" type="boolean">
+  Indicates if TOTP was generated successfully
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  The generated TOTP code (6 digits)
+</ResponseField>
+
+### How TOTP Works
+
+If the subscriber is registered in the database with a `b32Secret`:
+- TOTP is generated using the subscriber's secret
+- Custom expiry period is used if set, otherwise global setting applies
+
+If the subscriber is NOT in the database:
+- Secret is generated from AppSettings: `{secretFromSettings} + {subscriberId} + {streamId} + {type} + {padding}`
+- Uses global `timeTokenPeriod` setting
+
+## Subscriber Authentication Token
+
+Get a JWT authentication token for a subscriber (for push notifications).
+
+```bash GET /v2/push-notification/subscriber-auth-token
+curl -X GET "https://example.com:5443/LiveApp/rest/v2/push-notification/subscriber-auth-token?subscriberId=sub123&timeoutSeconds=3600" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField query="subscriberId" type="string" required>
+  Subscriber ID to generate token for
+</ParamField>
+
+<ParamField query="timeoutSeconds" type="integer">
+  Token validity duration in seconds (default: 3600)
+</ParamField>
+
+<ResponseField name="success" type="boolean">
+  Whether token generation succeeded
+</ResponseField>
+
+<ResponseField name="dataId" type="string">
+  The generated JWT token
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Description of the response
+</ResponseField>

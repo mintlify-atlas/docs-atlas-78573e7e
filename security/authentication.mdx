@@ -1,0 +1,130 @@
+---
+title: Authentication Overview
+description: Comprehensive guide to authentication mechanisms in Ant Media Server for securing live streaming applications
+---
+
+## Overview
+
+Ant Media Server provides multiple authentication mechanisms to secure your streaming infrastructure. This page covers the core authentication concepts and available security methods.
+
+## Authentication Methods
+
+Ant Media Server supports several authentication mechanisms:
+
+### 1. Token-Based Authentication
+
+Token-based authentication uses unique tokens to control stream access. Tokens can be:
+- **Publish tokens**: Control who can publish streams
+- **Play tokens**: Control who can watch streams
+- **Room tokens**: Control access to conference rooms
+
+See [Token-Based Access](/security/token-based-access) for detailed implementation.
+
+### 2. JWT (JSON Web Token) Authentication
+
+JWT provides stateless authentication using cryptographically signed tokens. Ant Media Server supports:
+- HMAC SHA-256 algorithm for secret-based validation
+- RSA-256 algorithm for public key validation via JWKS
+- Custom claims for fine-grained access control
+
+See [JWT Tokens](/security/jwt-tokens) for implementation details.
+
+### 3. TOTP (Time-Based One-Time Password)
+
+Time-based subscriber authentication using TOTP codes. Features:
+- Dynamic code generation based on shared secrets
+- Configurable code validity duration
+- Support for subscriber-based access control
+
+### 4. Hash-Based Authentication
+
+HMAC-SHA1 hash validation for stream access:
+- Computed based on streamId, sessionId, and secret
+- Simple and lightweight authentication
+- Suitable for basic security requirements
+
+## Authentication Service Interface
+
+The `ITokenService` interface (located at `security/ITokenService.java:17`) provides the core authentication methods:
+
+```java
+public interface ITokenService {
+    // Token validation
+    boolean checkToken(String tokenId, String streamId, String sessionId, String type);
+    
+    // JWT validation
+    boolean checkJwtToken(String jwtTokenId, String streamId, String sessionId, String type);
+    
+    // TOTP validation
+    boolean checkTimeBasedSubscriber(String subscriberId, String streamId, 
+                                     String sessionId, String subscriberCode, String type);
+    
+    // Hash validation
+    boolean checkHash(String hash, String streamId, String sessionId, String type);
+    
+    // Token creation
+    Token createToken(String streamId, long expireDate, String type, String roomId);
+    Token createJwtToken(String streamId, long expireDate, String type, String roomId);
+}
+```
+
+## Token Types
+
+Ant Media Server defines two primary token types:
+
+- **`PLAY_TOKEN`**: Grants permission to view/consume streams
+- **`PUBLISH_TOKEN`**: Grants permission to publish/broadcast streams
+
+## Session Management
+
+Authentication sessions are tracked using two maps:
+
+- **Authenticated Sessions**: General session tracking via `getAuthenticatedMap()`
+- **Subscriber Sessions**: Subscriber-specific tracking via `getSubscriberAuthenticatedMap()`
+
+These maps store session IDs and their authentication status for quick validation.
+
+## Security Best Practices
+
+<Warning>
+  Always use secure, randomly generated secrets for token generation. Never expose secret keys in client-side code or public repositories.
+</Warning>
+
+<Warning>
+  Set appropriate expiration times for tokens to limit the window of potential misuse. Short-lived tokens with refresh mechanisms provide better security.
+</Warning>
+
+<Warning>
+  Use HTTPS/WSS for all streaming connections to prevent token interception. Tokens transmitted over unencrypted connections can be stolen and reused.
+</Warning>
+
+<Warning>
+  Implement IP filtering alongside token authentication for defense-in-depth security. See [IP Filtering](/security/ip-filtering) for details.
+</Warning>
+
+## Configuration
+
+Authentication is configured via `AppSettings`. Common settings include:
+
+- `playTokenControlEnabled`: Enable token control for playback
+- `hashControlPlayEnabled`: Enable hash-based play authentication
+- `playJwtControlEnabled`: Enable JWT control for playback
+- `timeTokenSubscriberOnly`: Enable TOTP-only authentication
+- `enableTimeTokenForPlay`: Enable TOTP for play operations
+
+## Cluster Mode Considerations
+
+In cluster deployments, edge nodes communicate with origin nodes using internal JWT tokens:
+
+- Internal tokens use the `ClusterAuthorization` header
+- Tokens are signed with `clusterCommunicationKey` from AppSettings
+- This allows edge-origin communication without user tokens
+
+See `filter/TokenFilterManager.java:76-113` for cluster authentication implementation.
+
+## Next Steps
+
+- [Token-Based Access](/security/token-based-access) - Implement token authentication
+- [JWT Tokens](/security/jwt-tokens) - Configure JWT authentication
+- [IP Filtering](/security/ip-filtering) - Restrict access by IP address
+- [SSL/TLS Configuration](/security/ssl-tls) - Enable encrypted connections

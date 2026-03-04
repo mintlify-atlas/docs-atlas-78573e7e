@@ -1,0 +1,348 @@
+---
+title: "VoD API"
+description: "Manage video-on-demand files in Ant Media Server"
+---
+
+## Overview
+
+The VoD (Video on Demand) API allows you to upload, import, list, and delete video files. All VoD endpoints are prefixed with `/v2/vods`.
+
+## Get VoD File
+
+Retrieve a VoD file record from the database.
+
+```bash GET /v2/vods/{id}
+curl -X GET "https://example.com:5443/LiveApp/rest/v2/vods/vod123" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="id" type="string" required>
+  VoD file ID
+</ParamField>
+
+<ResponseField name="vodId" type="string">
+  Unique VoD identifier
+</ResponseField>
+
+<ResponseField name="vodName" type="string">
+  Display name of the VoD file
+</ResponseField>
+
+<ResponseField name="streamId" type="string">
+  Associated stream ID (for recorded streams)
+</ResponseField>
+
+<ResponseField name="filePath" type="string">
+  Relative path to the file
+</ResponseField>
+
+<ResponseField name="duration" type="integer">
+  Duration in milliseconds
+</ResponseField>
+
+<ResponseField name="fileSize" type="integer">
+  File size in bytes
+</ResponseField>
+
+<ResponseField name="creationDate" type="integer">
+  Creation timestamp
+</ResponseField>
+
+<ResponseField name="type" type="string">
+  VoD type: `userVod`, `streamVod`
+</ResponseField>
+
+## List VoD Files
+
+Get paginated list of VoD files with optional filtering and sorting.
+
+```bash GET /v2/vods/list/{offset}/{size}
+curl -X GET "https://example.com:5443/LiveApp/rest/v2/vods/list/0/10?sort_by=date&order_by=desc&search=recording" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="offset" type="integer" required>
+  Pagination offset (starting point)
+</ParamField>
+
+<ParamField path="size" type="integer" required>
+  Number of items to fetch (max: 50)
+</ParamField>
+
+<ParamField query="sort_by" type="string">
+  Sort field: `name` or `date`
+</ParamField>
+
+<ParamField query="order_by" type="string">
+  Sort order: `asc` (ascending) or `desc` (descending)
+</ParamField>
+
+<ParamField query="streamId" type="string">
+  Filter by associated stream ID
+</ParamField>
+
+<ParamField query="search" type="string">
+  Search string to filter VoD files
+</ParamField>
+
+**Response:** Array of VoD objects.
+
+## Get VoD Count
+
+Get total number of VoD files.
+
+```bash GET /v2/vods/count
+curl -X GET "https://example.com:5443/LiveApp/rest/v2/vods/count" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ResponseField name="number" type="integer">
+  Total number of VoD files in database
+</ResponseField>
+
+## Get VoD Count (Filtered)
+
+Get number of VoD files matching search criteria.
+
+```bash GET /v2/vods/count/{search}
+curl -X GET "https://example.com:5443/LiveApp/rest/v2/vods/count/recording" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="search" type="string" required>
+  Search string to filter VoD files
+</ParamField>
+
+<ResponseField name="number" type="integer">
+  Number of VoD files matching search criteria
+</ResponseField>
+
+## Upload VoD File
+
+Upload an external VoD file to Ant Media Server.
+
+```bash POST /v2/vods/create
+curl -X POST "https://example.com:5443/LiveApp/rest/v2/vods/create?name=MyVideo" \
+  -H "Authorization: Bearer {jwt}" \
+  -F "file=@/path/to/video.mp4" \
+  -F "metadata={\"title\":\"My Video\",\"description\":\"Sample video\"}"
+```
+
+<ParamField query="name" type="string" required>
+  Display name for the VoD file
+</ParamField>
+
+<ParamField formData="file" type="file" required>
+  Video file to upload
+</ParamField>
+
+<ParamField formData="metadata" type="string">
+  Custom JSON metadata for the VoD file
+</ParamField>
+
+**Supported formats:** `mp4`, `webm`, `mov`, `avi`, `mp3`, `wmv`
+
+<ResponseField name="success" type="boolean">
+  Whether upload was successful
+</ResponseField>
+
+<ResponseField name="dataId" type="string">
+  Generated VoD ID
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Error message or VoD ID
+</ResponseField>
+
+<Note>
+If `vodUploadFinishScript` is configured in AppSettings, the uploaded file will be queued for processing. The VoD status will be:
+- `inqueue` - Waiting for processing
+- `processing` - Currently being processed
+- `finished` - Processing completed successfully
+- `failed` - Processing failed
+</Note>
+
+## Delete VoD File
+
+Delete a specific VoD file from database and storage.
+
+```bash DELETE /v2/vods/{id}
+curl -X DELETE "https://example.com:5443/LiveApp/rest/v2/vods/vod123" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField path="id" type="string" required>
+  VoD ID to delete
+</ParamField>
+
+<ResponseField name="success" type="boolean">
+  Whether deletion was successful
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Result message
+</ResponseField>
+
+<Warning>
+This operation:
+- Deletes the video file from disk
+- Deletes the preview/thumbnail if exists
+- Removes the record from database
+- Deletes files from S3 if cloud storage is configured
+</Warning>
+
+## Delete Multiple VoD Files
+
+Delete multiple VoD files in bulk.
+
+```bash DELETE /v2/vods/
+curl -X DELETE "https://example.com:5443/LiveApp/rest/v2/vods/?ids=vod1,vod2,vod3" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField query="ids" type="string" required>
+  Comma-separated VoD IDs to delete
+</ParamField>
+
+<ResponseField name="success" type="boolean">
+  Whether all deletions were successful
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Result message (includes failed ID if operation stopped)
+</ResponseField>
+
+## Import VoD Files from Directory
+
+Import VoD files from a directory and make them streamable.
+
+```bash POST /v2/vods/directory
+curl -X POST "https://example.com:5443/LiveApp/rest/v2/vods/directory?directory=/var/videos" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField query="directory" type="string" required>
+  Full path of the directory containing VoD files to import
+</ParamField>
+
+<ResponseField name="success" type="boolean">
+  Whether import was successful
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Result message
+</ResponseField>
+
+<Info>
+This operation:
+- Scans the specified directory for video files
+- Creates database records for each file
+- Creates symbolic links to make files accessible via HTTP
+- Does NOT copy or move the original files
+</Info>
+
+## Unlink VoD Files from Directory
+
+Delete database records for VoD files without deleting the actual files.
+
+```bash DELETE /v2/vods/directory
+curl -X DELETE "https://example.com:5443/LiveApp/rest/v2/vods/directory?directory=/var/videos" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ParamField query="directory" type="string" required>
+  Full path of the directory to unlink VoD files from
+</ParamField>
+
+<ResponseField name="success" type="boolean">
+  Whether unlink was successful
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Result message
+</ResponseField>
+
+<Info>
+This operation:
+- Removes database records for VoD files in the directory
+- Removes symbolic links
+- Does NOT delete the actual video files
+</Info>
+
+## Import VoDs to Stalker Portal
+
+Import VoD files to Stalker middleware portal.
+
+```bash POST /v2/vods/import-to-stalker
+curl -X POST "https://example.com:5443/LiveApp/rest/v2/vods/import-to-stalker" \
+  -H "Authorization: Bearer {jwt}"
+```
+
+<ResponseField name="success" type="boolean">
+  Whether import was successful
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Error message if failed
+</ResponseField>
+
+<ResponseField name="errorId" type="integer">
+  Error code:
+  - `404` - Stalker DB info missing
+  - `500` - No VoD folder specified
+</ResponseField>
+
+<Note>
+Requires Stalker portal database configuration in AppSettings:
+- `stalkerDBServer`
+- `stalkerDBUsername`
+- `stalkerDBPassword`
+- `vodFolder`
+</Note>
+
+## VoD Upload Processing
+
+When a VoD file is uploaded, you can configure a post-processing script via the `vodUploadFinishScript` setting in AppSettings.
+
+### Process Status Values
+
+- `null` - No processing configured
+- `inqueue` - Queued for processing
+- `processing` - Currently being processed  
+- `finished` - Processing completed successfully
+- `failed` - Processing failed
+
+### Example Processing Script
+
+```bash
+#!/bin/bash
+# Script receives the uploaded file path as argument
+INPUT_FILE=$1
+
+# Example: Convert to different format, generate thumbnails, etc.
+ffmpeg -i "$INPUT_FILE" -vf scale=640:360 "${INPUT_FILE%.*}_360p.mp4"
+
+# Return 0 for success, non-zero for failure
+exit $?
+```
+
+Configure in AppSettings:
+```
+vodUploadFinishScript=/path/to/process-vod.sh
+```
+
+## VoD File Streaming
+
+Once imported or uploaded, VoD files can be streamed via:
+
+**HLS:**
+```
+https://{host}:{port}/{app}/streams/{vodFilePath}
+```
+
+**Direct file access:**
+```
+https://{host}:{port}/{app}/streams/{relativePath}
+```
+
+The `filePath` in the VoD object contains the relative path needed for streaming.

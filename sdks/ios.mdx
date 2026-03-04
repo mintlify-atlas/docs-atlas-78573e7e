@@ -1,0 +1,498 @@
+---
+title: "iOS SDK"
+description: "Native iOS SDK for WebRTC streaming in iPhone and iPad applications"
+---
+
+The Ant Media Server iOS SDK enables ultra-low latency WebRTC streaming in native iOS applications. Built with Swift/Objective-C compatibility and optimized for iPhone and iPad.
+
+## Installation
+
+### CocoaPods
+
+Add to your `Podfile`:
+
+```ruby
+pod 'AntMediaSDK', '~> 2.9.0'
+```
+
+Then run:
+
+```bash
+pod install
+```
+
+### Swift Package Manager
+
+Add the package in Xcode:
+
+1. Go to **File** > **Add Packages**
+2. Enter the repository URL: `https://github.com/ant-media/WebRTC-iOS-SDK`
+3. Select version and add to your project
+
+### Manual Installation
+
+1. Download the latest release from [GitHub](https://github.com/ant-media/WebRTC-iOS-SDK)
+2. Add `AntMediaSDK.framework` to your project
+3. Link the framework in your target settings
+
+## Configuration
+
+### Info.plist Permissions
+
+Add required permissions to your `Info.plist`:
+
+```xml
+<key>NSCameraUsageDescription</key>
+<string>Camera access is required for video streaming</string>
+
+<key>NSMicrophoneUsageDescription</key>
+<string>Microphone access is required for audio streaming</string>
+```
+
+### Background Modes
+
+Enable background audio if needed:
+
+```xml
+<key>UIBackgroundModes</key>
+<array>
+    <string>audio</string>
+</array>
+```
+
+## Basic Usage
+
+### Initialize the SDK
+
+<CodeGroup>
+
+```swift Swift
+import AntMediaSDK
+
+class ViewController: UIViewController {
+    var client: AntMediaClient!
+    let serverUrl = "wss://your-server:5443/WebRTCAppEE/websocket"
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        
+        // Initialize client
+        client = AntMediaClient.init()
+        client.delegate = self
+        client.setOptions(url: serverUrl, streamId: "stream1", token: "")
+        client.setWebSocketServerUrl(url: serverUrl)
+    }
+}
+
+// Implement delegate
+extension ViewController: AntMediaClientDelegate {
+    func clientDidConnect(_ client: AntMediaClient) {
+        print("Connected to server")
+    }
+    
+    func clientDidDisconnect(_ client: AntMediaClient) {
+        print("Disconnected from server")
+    }
+    
+    func clientHasError(_ client: AntMediaClient, message: String) {
+        print("Error: \(message)")
+    }
+}
+```
+
+```objectivec Objective-C
+#import <AntMediaSDK/AntMediaSDK.h>
+
+@interface ViewController () <AntMediaClientDelegate>
+@property (nonatomic, strong) AntMediaClient *client;
+@end
+
+@implementation ViewController
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    
+    // Initialize client
+    self.client = [[AntMediaClient alloc] init];
+    self.client.delegate = self;
+    [self.client setOptionsWithUrl:@"wss://your-server:5443/WebRTCAppEE/websocket"
+                          streamId:@"stream1"
+                             token:@""];
+}
+
+#pragma mark - AntMediaClientDelegate
+
+- (void)clientDidConnect:(AntMediaClient *)client {
+    NSLog(@"Connected to server");
+}
+
+- (void)clientDidDisconnect:(AntMediaClient *)client {
+    NSLog(@"Disconnected from server");
+}
+
+- (void)clientHasError:(AntMediaClient *)client message:(NSString *)message {
+    NSLog(@"Error: %@", message);
+}
+
+@end
+```
+
+</CodeGroup>
+
+### Publishing a Stream
+
+Publish video from the device camera:
+
+<CodeGroup>
+
+```swift Swift
+// Set local video view
+client.setLocalView(view: localVideoView)
+
+// Start publishing
+let streamId = "myStream123"
+client.publish(streamId: streamId)
+
+// Publish with token
+let token = "your-publish-token"
+client.publish(streamId: streamId, token: token)
+
+// Stop publishing
+client.stop()
+```
+
+```objectivec Objective-C
+// Set local video view
+[self.client setLocalViewWithView:self.localVideoView];
+
+// Start publishing
+NSString *streamId = @"myStream123";
+[self.client publishWithStreamId:streamId];
+
+// Publish with token
+NSString *token = @"your-publish-token";
+[self.client publishWithStreamId:streamId token:token];
+
+// Stop publishing
+[self.client stop];
+```
+
+</CodeGroup>
+
+### Playing a Stream
+
+Play an existing stream:
+
+<CodeGroup>
+
+```swift Swift
+// Set remote video view
+client.setRemoteView(view: remoteVideoView)
+
+// Start playing
+let streamId = "myStream123"
+client.play(streamId: streamId)
+
+// Play with token
+let token = "your-play-token"
+client.play(streamId: streamId, token: token)
+
+// Stop playing
+client.stop()
+```
+
+```objectivec Objective-C
+// Set remote video view
+[self.client setRemoteViewWithView:self.remoteVideoView];
+
+// Start playing
+NSString *streamId = @"myStream123";
+[self.client playWithStreamId:streamId];
+
+// Play with token
+NSString *token = @"your-play-token";
+[self.client playWithStreamId:streamId token:token];
+
+// Stop playing
+[self.client stop];
+```
+
+</CodeGroup>
+
+## Video Rendering
+
+Add video views to your interface:
+
+<CodeGroup>
+
+```swift Swift
+import UIKit
+
+class ViewController: UIViewController {
+    let localVideoView: UIView = {
+        let view = UIView()
+        view.backgroundColor = .black
+        return view
+    }()
+    
+    let remoteVideoView: UIView = {
+        let view = UIView()
+        view.backgroundColor = .black
+        return view
+    }()
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        
+        // Add video views to your layout
+        view.addSubview(localVideoView)
+        view.addSubview(remoteVideoView)
+        
+        // Set constraints...
+        
+        // Set views in client
+        client.setLocalView(view: localVideoView)
+        client.setRemoteView(view: remoteVideoView)
+    }
+}
+```
+
+```objectivec Objective-C
+@interface ViewController ()
+@property (nonatomic, strong) UIView *localVideoView;
+@property (nonatomic, strong) UIView *remoteVideoView;
+@end
+
+@implementation ViewController
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    
+    // Create video views
+    self.localVideoView = [[UIView alloc] init];
+    self.localVideoView.backgroundColor = [UIColor blackColor];
+    
+    self.remoteVideoView = [[UIView alloc] init];
+    self.remoteVideoView.backgroundColor = [UIColor blackColor];
+    
+    // Add to view hierarchy
+    [self.view addSubview:self.localVideoView];
+    [self.view addSubview:self.remoteVideoView];
+    
+    // Set views in client
+    [self.client setLocalViewWithView:self.localVideoView];
+    [self.client setRemoteViewWithView:self.remoteVideoView];
+}
+
+@end
+```
+
+</CodeGroup>
+
+## Conference Room
+
+Join a multi-party conference room:
+
+<CodeGroup>
+
+```swift Swift
+let roomId = "conference-room-1"
+client.joinRoom(roomId: roomId)
+
+// Handle room events in delegate
+func roomJoined(roomId: String) {
+    print("Joined room: \(roomId)")
+}
+
+func streamJoinedRoom(streamId: String) {
+    print("Stream joined: \(streamId)")
+    client.play(streamId: streamId)
+}
+
+// Leave room
+client.leaveFromRoom(roomId: roomId)
+```
+
+```objectivec Objective-C
+NSString *roomId = @"conference-room-1";
+[self.client joinRoomWithRoomId:roomId];
+
+// Handle room events in delegate
+- (void)roomJoined:(NSString *)roomId {
+    NSLog(@"Joined room: %@", roomId);
+}
+
+- (void)streamJoinedRoom:(NSString *)streamId {
+    NSLog(@"Stream joined: %@", streamId);
+    [self.client playWithStreamId:streamId];
+}
+
+// Leave room
+[self.client leaveFromRoomWithRoomId:roomId];
+```
+
+</CodeGroup>
+
+## Camera Controls
+
+Control camera and media:
+
+<CodeGroup>
+
+```swift Swift
+// Switch between front and back camera
+client.switchCamera()
+
+// Toggle video on/off
+client.toggleVideo()
+
+// Toggle audio on/off
+client.toggleAudio()
+
+// Mute/unmute microphone
+client.muteAudio(true)
+
+// Enable/disable video
+client.enableVideo(true)
+```
+
+```objectivec Objective-C
+// Switch between front and back camera
+[self.client switchCamera];
+
+// Toggle video on/off
+[self.client toggleVideo];
+
+// Toggle audio on/off
+[self.client toggleAudio];
+
+// Mute/unmute microphone
+[self.client muteAudio:YES];
+
+// Enable/disable video
+[self.client enableVideo:YES];
+```
+
+</CodeGroup>
+
+## Data Channels
+
+Send and receive real-time data:
+
+<CodeGroup>
+
+```swift Swift
+// Send data
+let message = "Hello viewers!"
+client.sendData(message, streamId: streamId)
+
+// Receive data in delegate
+func dataReceivedFromDataChannel(_ data: Data, streamId: String) {
+    if let message = String(data: data, encoding: .utf8) {
+        print("Received: \(message)")
+    }
+}
+```
+
+```objectivec Objective-C
+// Send data
+NSString *message = @"Hello viewers!";
+[self.client sendData:message streamId:streamId];
+
+// Receive data in delegate
+- (void)dataReceivedFromDataChannel:(NSData *)data streamId:(NSString *)streamId {
+    NSString *message = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    NSLog(@"Received: %@", message);
+}
+```
+
+</CodeGroup>
+
+## Delegate Methods
+
+Implement all delegate methods:
+
+```swift
+protocol AntMediaClientDelegate: AnyObject {
+    func clientDidConnect(_ client: AntMediaClient)
+    func clientDidDisconnect(_ client: AntMediaClient)
+    func clientHasError(_ client: AntMediaClient, message: String)
+    func publishStarted(streamId: String)
+    func publishFinished(streamId: String)
+    func playStarted(streamId: String)
+    func playFinished(streamId: String)
+    func disconnected(streamId: String)
+    func dataReceivedFromDataChannel(_ data: Data, streamId: String)
+    func roomJoined(roomId: String)
+    func streamJoinedRoom(streamId: String)
+    func streamLeftRoom(streamId: String)
+}
+```
+
+## Configuration Options
+
+### Video Resolution
+
+<CodeGroup>
+
+```swift Swift
+client.setVideoResolution(width: 1280, height: 720)
+```
+
+```objectivec Objective-C
+[self.client setVideoResolutionWithWidth:1280 height:720];
+```
+
+</CodeGroup>
+
+### Audio/Video Settings
+
+<CodeGroup>
+
+```swift Swift
+// Set target bitrate
+client.setTargetBitrate(videoBitrate: 2000)
+
+// Set max bitrate
+client.setMaxBitrate(videoBitrate: 3000)
+```
+
+```objectivec Objective-C
+// Set target bitrate
+[self.client setTargetBitrateWithVideoBitrate:2000];
+
+// Set max bitrate
+[self.client setMaxBitrateWithVideoBitrate:3000];
+```
+
+</CodeGroup>
+
+## Resources
+
+<Card title="iOS SDK Repository" icon="github" href="https://github.com/ant-media/WebRTC-iOS-SDK">
+  View source code, sample apps, and contribute on GitHub
+</Card>
+
+## Requirements
+
+- iOS 12.0 or later
+- Xcode 13.0 or later
+- Swift 5.5+ or Objective-C
+- Camera and microphone hardware
+- Ant Media Server with SSL/TLS configured
+
+<Note>
+  WebRTC requires HTTPS in production. Make sure your Ant Media Server has a valid SSL certificate.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Android SDK" icon="android" href="/sdks/android">
+    Build for Android with the native Android SDK
+  </Card>
+  
+  <Card title="Authentication" icon="shield-halved" href="/security/authentication">
+    Secure streams with token authentication
+  </Card>
+</CardGroup>
