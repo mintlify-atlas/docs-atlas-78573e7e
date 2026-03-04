@@ -1,0 +1,177 @@
+{
+  "projectType": "infrastructure",
+  "projectName": "Ant Media Server",
+  "projectDescription": "Ultra-low latency live streaming engine with WebRTC, SRT, RTMP, HLS, CMAF, adaptive bitrate, and transcoding capabilities",
+  "theme": "aspen",
+  "primaryColor": "#c12231",
+  "lightColor": "#d66d70",
+  "darkColor": "#f49da2",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/streaming-protocols",
+              "concepts/adaptive-bitrate",
+              "concepts/ultra-low-latency",
+              "concepts/architecture"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/linux-installation",
+              "deployment/docker",
+              "deployment/aws",
+              "deployment/azure",
+              "deployment/gcp",
+              "deployment/ssl-setup"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/application-settings",
+              "configuration/encoder-settings",
+              "configuration/server-settings",
+              "configuration/security"
+            ]
+          },
+          {
+            "group": "Streaming",
+            "pages": [
+              "streaming/webrtc",
+              "streaming/rtmp",
+              "streaming/srt",
+              "streaming/hls",
+              "streaming/cmaf",
+              "streaming/rtsp"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/recording",
+              "features/transcoding",
+              "features/clustering",
+              "features/ip-camera-streaming",
+              "features/push-notifications",
+              "features/webhooks"
+            ]
+          },
+          {
+            "group": "Security",
+            "pages": [
+              "security/authentication",
+              "security/token-based-access",
+              "security/jwt-tokens",
+              "security/ip-filtering",
+              "security/ssl-tls"
+            ]
+          },
+          {
+            "group": "Storage",
+            "pages": [
+              "storage/overview",
+              "storage/aws-s3",
+              "storage/google-cloud-storage"
+            ]
+          },
+          {
+            "group": "SDKs",
+            "pages": [
+              "sdks/overview",
+              "sdks/javascript",
+              "sdks/android",
+              "sdks/ios",
+              "sdks/react-native",
+              "sdks/flutter"
+            ]
+          },
+          {
+            "group": "Operations",
+            "pages": [
+              "operations/monitoring",
+              "operations/analytics",
+              "operations/scaling",
+              "operations/troubleshooting"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "REST API",
+            "pages": [
+              "api/overview",
+              "api/authentication",
+              "api/broadcasts",
+              "api/vod",
+              "api/cluster",
+              "api/push-notifications"
+            ]
+          },
+          {
+            "group": "WebRTC API",
+            "pages": [
+              "api/webrtc/overview",
+              "api/webrtc/publishing",
+              "api/webrtc/playing",
+              "api/webrtc/peer-to-peer"
+            ]
+          },
+          {
+            "group": "Data Models",
+            "pages": [
+              "api/models/broadcast",
+              "api/models/stream",
+              "api/models/endpoint",
+              "api/models/subscriber"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Ultra-low latency WebRTC streaming (~0.5s)",
+    "Multi-protocol support (WebRTC, SRT, RTMP, RTSP, HLS, CMAF)",
+    "Adaptive bitrate (ABR) streaming and transcoding",
+    "Horizontal scaling with clustering support",
+    "IP camera and ONVIF integration",
+    "Recording to MP4, WebM with cloud storage (S3, GCP)",
+    "Token-based authentication and JWT security",
+    "Real-time analytics and viewer statistics",
+    "Push notifications (Firebase, APNs)",
+    "Enterprise features: SRT ingest, advanced encoding, auto-scaling"
+  ],
+  "publicApiSurface": [
+    "/rest/v2/broadcasts - Broadcast management API",
+    "/rest/v2/vod - Video on demand API",
+    "/rest/v2/cluster - Cluster management API",
+    "/rest/v2/push-notifications - Push notification API",
+    "BroadcastRestService - Main REST service for streams",
+    "VoDRestService - Video on demand service",
+    "AntMediaApplicationAdapter - Core application adapter",
+    "IWebRTCAdaptor - WebRTC integration interface",
+    "MuxAdaptor - Stream muxing and adaptive bitrate",
+    "HLSMuxer - HLS/CMAF output",
+    "StreamFetcher - External stream ingestion",
+    "ClusterNode - Clustering and load balancing",
+    "TokenFilterManager - Security and access control",
+    "StorageClient - Cloud storage integration"
+  ]
+}
